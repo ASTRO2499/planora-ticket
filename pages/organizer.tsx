@@ -18,6 +18,30 @@ export default function OrganizerDashboard() {
   const [events, setEvents] = useState<any[]>([])
   const [selected, setSelected] = useState<any | null>(null)
   const [templateText, setTemplateText] = useState('')
+  const [templateError, setTemplateError] = useState<string>('')
+  const [templatePreview, setTemplatePreview] = useState<{ brandPrimary?: string; brandAccent?: string; brandDark?: string; headerTitle?: string } | null>(null)
+
+  function applySampleTemplate(kind: 'cosmic' | 'ocean') {
+    const samples: Record<string, any> = {
+      cosmic: {
+        brandPrimary: '#7C3AED',
+        brandAccent: '#EC4899',
+        brandDark: '#0F172A',
+        headerTitle: 'ENTRY PASS'
+      },
+      ocean: {
+        brandPrimary: '#0EA5E9',
+        brandAccent: '#10B981',
+        brandDark: '#0B1220',
+        headerTitle: 'EVENT ADMIT'
+      }
+    }
+    const t = samples[kind]
+    setTemplateText(JSON.stringify(t, null, 2))
+    setTemplatePreview(t)
+    setTemplateError('')
+    toast.success('Sample template applied')
+  }
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [tickets, setTickets] = useState<any[]>([])
   const [ticketsLoading, setTicketsLoading] = useState(false)
@@ -179,6 +203,60 @@ export default function OrganizerDashboard() {
     } catch { toast.error('Network error') }
   }
 
+  async function loadExistingTemplate() {
+    if (!selected) return
+    try {
+      const headers: Record<string,string> = {}
+      if (organizerSecret) headers['x-organizer-secret'] = organizerSecret
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+      const res = await fetch(`/api/organizer/templates?eventId=${encodeURIComponent(selected.id)}`, { headers })
+      if (!res.ok) {
+        toast.error('No template found for this event')
+        return
+      }
+      const data = await res.json()
+      setTemplateText(JSON.stringify(data.template || {}, null, 2))
+      setTemplateError('')
+      setTemplatePreview(data.template || null)
+      toast.success('Loaded current template')
+    } catch {
+      toast.error('Failed to load template')
+    }
+  }
+
+  function validateAndPreviewTemplate() {
+    try {
+      const parsed = JSON.parse(templateText || '{}')
+      const allowedKeys = ['brandPrimary', 'brandAccent', 'brandDark', 'headerTitle']
+      const invalid = Object.keys(parsed).filter(k => !allowedKeys.includes(k))
+      if (invalid.length) {
+        setTemplateError(`Unknown keys: ${invalid.join(', ')}`)
+      } else {
+        setTemplateError('')
+      }
+      setTemplatePreview(parsed)
+      toast.success('Preview updated')
+    } catch (e: any) {
+      setTemplateError(e?.message || 'Invalid JSON')
+      setTemplatePreview(null)
+      toast.error('Invalid JSON')
+    }
+  }
+
+  function previewPdfForLatestAttendee() {
+    if (!selected) {
+      toast.error('Select an event first')
+      return
+    }
+    if (!tickets || tickets.length === 0) {
+      toast.error('No attendees yet to preview a ticket')
+      return
+    }
+    const latest = tickets[0]
+    const url = `/api/ticket-pdf?id=${encodeURIComponent(latest.id)}`
+    window.open(url, '_blank')
+  }
+
   useEffect(() => {
     // Session persistence: restore organizer session if available
     async function restore() {
@@ -206,6 +284,29 @@ export default function OrganizerDashboard() {
       setAnalytics(null)
     }
   }, [selected?.id])
+
+  // Try to preload existing template for selected event
+  useEffect(() => {
+    let abort = false
+    async function preloadTemplate() {
+      if (!selected?.id) { setTemplateText(''); setTemplatePreview(null); setTemplateError(''); return }
+      try {
+        const headers: Record<string,string> = {}
+        if (organizerSecret) headers['x-organizer-secret'] = organizerSecret
+        if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+        const res = await fetch(`/api/organizer/templates?eventId=${encodeURIComponent(selected.id)}`, { headers })
+        if (!res.ok) return
+        const data = await res.json()
+        if (!abort) {
+          setTemplateText(JSON.stringify(data.template || {}, null, 2))
+          setTemplatePreview(data.template || null)
+          setTemplateError('')
+        }
+      } catch {}
+    }
+    preloadTemplate()
+    return () => { abort = true }
+  }, [selected?.id, organizerSecret, accessToken])
 
   if (!authed) {
     return (
@@ -276,7 +377,12 @@ export default function OrganizerDashboard() {
                 <Input value={selected.title || ''} onChange={(e)=>setSelected({...selected, title:e.target.value})} placeholder="Title" />
                 <Input value={selected.description || ''} onChange={(e)=>setSelected({...selected, description:e.target.value})} placeholder="Description" />
                 <div className="grid grid-cols-2 gap-2">
-                  <Input value={selected.date || ''} onChange={(e)=>setSelected({...selected, date:e.target.value})} placeholder="Date" />
+                  <Input
+                    type="datetime-local"
+                    value={selected?.date ? (selected.date.includes('T') ? selected.date.slice(0,16) : `${selected.date}T00:00`) : ''}
+                    onChange={(e)=>setSelected({...selected, date:e.target.value})}
+                    placeholder="Date & Time"
+                  />
                   <Input value={selected.location || ''} onChange={(e)=>setSelected({...selected, location:e.target.value})} placeholder="Location" />
                 </div>
                 <Input value={selected.price_inr || ''} onChange={(e)=>setSelected({...selected, price_inr:e.target.value})} placeholder="Price (₹)" />
@@ -291,11 +397,53 @@ export default function OrganizerDashboard() {
 
                 <div className="mt-6">
                   <h3 className="text-lg font-semibold text-white">Ticket Template (JSON)</h3>
-                  <p className="text-slate-400 text-xs">Customize colors and header. Example: {`{"brandPrimary":"#1D4ED8","brandAccent":"#F59E0B","headerTitle":"AKCOMSOC Entry"}`}</p>
-                  <textarea className="w-full mt-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" rows={6} value={templateText} onChange={(e)=>setTemplateText(e.target.value)} />
-                  <div className="mt-2">
-                    <Button onClick={uploadTemplate}>Upload Template</Button>
+                  <p className="text-slate-400 text-xs">Customize ticket branding and header using JSON. Keys supported:
+                    <span className="block mt-1 text-[11px] text-slate-500">brandPrimary, brandAccent, brandDark, headerTitle</span>
+                  </p>
+                  <pre className="text-[11px] text-slate-400 bg-white/5 border border-white/10 rounded-lg p-3 mt-2 overflow-x-auto">
+{`Example:\n{
+  "brandPrimary": "#1D4ED8",
+  "brandAccent": "#F59E0B",
+  "brandDark": "#0F172A",
+  "headerTitle": "Event Entry"
+}`}
+                  </pre>
+                  <textarea className="w-full mt-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-mono text-sm" rows={8} value={templateText} onChange={(e)=>setTemplateText(e.target.value)} />
+                  {templateError && <div className="text-xs text-amber-400 mt-1">{templateError}</div>}
+                  <div className="mt-3 flex gap-2 flex-wrap items-center">
+                    <Button onClick={validateAndPreviewTemplate} variant="outline">Preview</Button>
+                    <Button onClick={loadExistingTemplate} variant="ghost">Load Current</Button>
+                    <Button onClick={uploadTemplate}>Save Template</Button>
+                    <Button onClick={previewPdfForLatestAttendee} variant="cosmic" title="Opens latest attendee's ticket using the saved template">Preview PDF</Button>
+                    <div className="ml-auto flex gap-2">
+                      <Button type="button" variant="ghost" onClick={() => applySampleTemplate('cosmic')}>Sample: Cosmic</Button>
+                      <Button type="button" variant="ghost" onClick={() => applySampleTemplate('ocean')}>Sample: Ocean</Button>
+                    </div>
                   </div>
+                  <p className="text-[11px] text-slate-500 mt-1">Note: PDF preview uses the last saved template. Click "Save Template" to apply changes.</p>
+
+                  {templatePreview && (
+                    <div className="mt-4 border border-white/10 rounded-xl overflow-hidden">
+                      <div className="p-4" style={{ background: templatePreview.brandPrimary || '#7C3AED' }}>
+                        <div className="text-white font-bold">{templatePreview.headerTitle || 'ENTRY PASS'}</div>
+                        <div className="text-white/70 text-xs">Preview</div>
+                      </div>
+                      <div className="p-4 grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <div className="text-slate-400">Primary</div>
+                          <div className="h-6 rounded" style={{ background: templatePreview.brandPrimary || '#7C3AED' }} />
+                        </div>
+                        <div>
+                          <div className="text-slate-400">Accent</div>
+                          <div className="h-6 rounded" style={{ background: templatePreview.brandAccent || '#EC4899' }} />
+                        </div>
+                        <div>
+                          <div className="text-slate-400">Dark</div>
+                          <div className="h-6 rounded" style={{ background: templatePreview.brandDark || '#1F2937' }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

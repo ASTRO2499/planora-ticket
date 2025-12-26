@@ -15,7 +15,7 @@ export default function AdminPage() {
   const [authState, setAuthState] = useState<AuthState>('unknown')
   const [loading, setLoading] = useState(false)
   const [stats, setStats] = useState<any>(null)
-  const [eventFilter, setEventFilter] = useState('AKCOMSOC2025')
+  const [eventFilter, setEventFilter] = useState('ALL')
   const [events, setEvents] = useState<any[]>([])
   const isAuthed = authState === 'authenticated'
 

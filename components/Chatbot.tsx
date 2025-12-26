@@ -11,16 +11,12 @@ type Message = {
   isTyping?: boolean
 }
 
-const MASCOT_GREETING = "Hi! I'm ASTRO, your event assistant! 🎉 Ask me anything about AKCOMSOC 2025, tickets, or registration!"
+const MASCOT_GREETING = "Hi! I'm ASTRO, your event assistant! 🎉 Ask me anything about events, tickets, or registration!"
 
 type Intent = { id: string; keywords: string[]; response: (msg: string) => string }
 
 const INTENTS: Intent[] = [
-  {
-    id: 'akcomsoc',
-    keywords: ['akcomsoc', 'akcom', 'soc25', '2025', 'event'],
-    response: () => 'AKCOMSOC 2025 focuses on 5G networks and Communication IoT. Fee is ₹1000. Register at /akcomsoc-2025.'
-  },
+  // Removed AKCOMSOC-specific intent; keep generic intents below
   {
     id: 'pricing',
     keywords: ['price', 'cost', 'fee', 'rupees', '₹', 'rs', 'charge'],
@@ -69,14 +65,14 @@ const INTENTS: Intent[] = [
 ]
 
 const QUICK_ACTIONS = [
-  { label: 'Register Now', icon: Zap, action: () => window.location.href = '/akcomsoc-2025' },
+  { label: 'Register Now', icon: Zap, action: () => window.location.href = '/events' },
   { label: 'View Tickets', icon: Ticket, action: () => window.location.href = '/my-tickets' },
-  { label: 'Event Details', icon: Calendar, action: () => 'Tell me more about AKCOMSOC 2025' },
+  { label: 'Event Details', icon: Calendar, action: () => 'Tell me more about current events' },
   { label: 'Need Help?', icon: HelpCircle, action: () => 'I need support with my registration' }
 ]
 
 const FOLLOW_UPS: Record<string, string[]> = {
-  akcomsoc: ['What\'s the fee?', 'How do I register?', 'What\'s included?'],
+  // Removed AKCOMSOC follow-ups
   pricing: ['Any student discount?', 'Is GST included?', 'Payment methods?'],
   payment: ['Is UPI supported?', 'Can I pay later?', 'Are refunds available?'],
   ticket: ['Where to find my ticket?', 'Can I download PDF?', 'Need QR code?'],

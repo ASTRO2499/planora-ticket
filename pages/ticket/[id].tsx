@@ -86,7 +86,7 @@ export default function TicketPage() {
 
                 <div>
                   <div className="text-xs sm:text-sm text-slate-500">Event</div>
-                  <div className="text-violet-400 font-medium text-sm sm:text-base">{ticket.event_id || 'AKCOMSOC 2025'}</div>
+                  <div className="text-violet-400 font-medium text-sm sm:text-base">{ticket.event_id || 'Event'}</div>
                 </div>
 
                 <div className="mt-6 sm:mt-8 space-y-2 sm:space-y-3">

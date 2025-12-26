@@ -5,17 +5,7 @@ import fs from 'fs'
 
 const supabase = createClient(process.env.SUPABASE_URL || '', process.env.SUPABASE_SERVICE_KEY || '')
 
-// Static AKCOMSOC 2025 event
-const AKCOMSOC_EVENT = {
-  id: 'akcomsoc-2025',
-  title: 'AKCOMSOC 2025',
-  description: 'A focused deep dive into 5G networks and Communication IoT—latency, edge computing, massive device orchestration, and secure protocols powering next-gen applications from smart campuses to industry automation.',
-  price_inr: 1000,
-  image_url: null,
-  is_published: true,
-  created_at: new Date(),
-  is_featured: true
-}
+// Removed static hardcoded event; API now relies solely on database entries.
 
 export const config = {
   api: {
@@ -133,9 +123,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(500).json({ error: error.message })
       }
       
-      // Combine static AKCOMSOC event with dynamic events
-      const allEvents = [AKCOMSOC_EVENT, ...(data || [])]
-      return res.json({ events: allEvents })
+      return res.json({ events: data || [] })
     } catch (err) {
       console.error('fetch events error', err)
       return res.status(500).json({ error: 'server_error', details: String(err) })

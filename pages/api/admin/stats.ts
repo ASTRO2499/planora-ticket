@@ -24,7 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!checkAuth(req)) return res.status(403).json({ error: 'unauthorized' })
   if (req.method !== 'GET') return res.status(405).end()
 
-  const eventId = (req.query.eventId as string) || 'AKCOMSOC2025'
+  const eventId = (req.query.eventId as string) || 'ALL'
 
   try {
     const { count: totalCount } = await supabase.from('tickets').select('*', { count: 'exact', head: true }).eq('event_id', eventId)
