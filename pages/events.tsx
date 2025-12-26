@@ -6,14 +6,6 @@ import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import LoadingAnimation from '../components/LoadingAnimation'
 
-const AKCOMSOC_EVENT = {
-  id: 'akcomsoc-2025',
-  title: 'AKCOMSOC 2025',
-  description: 'A focused deep dive into 5G networks and Communication IoT—latency, edge computing, massive device orchestration, and secure protocols powering next-gen applications from smart campuses to industry automation.',
-  price_inr: 1000,
-  image_url: null,
-}
-
 type Event = {
   id: string
   title: string
@@ -24,7 +16,7 @@ type Event = {
 }
 
 export default function EventsPage() {
-  const [events, setEvents] = useState<Event[]>([AKCOMSOC_EVENT])
+  const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -34,18 +26,14 @@ export default function EventsPage() {
         const res = await fetch('/api/events')
         if (res.ok) {
           const data = await res.json()
-          // Always include AKCOMSOC, then add any fetched events
-          const allEvents = data.events || [AKCOMSOC_EVENT]
-          setEvents(allEvents)
+          setEvents(data.events || [])
         } else {
-          // If API fails, at least show AKCOMSOC
-          setEvents([AKCOMSOC_EVENT])
+          setEvents([])
           setError('Could not load all events')
         }
       } catch (err) {
         console.error('Error loading events', err)
-        // Fallback: show only AKCOMSOC on error
-        setEvents([AKCOMSOC_EVENT])
+        setEvents([])
         setError('Error loading events')
       } finally {
         setLoading(false)
@@ -96,7 +84,7 @@ export default function EventsPage() {
                   <div className="flex justify-between items-center pt-1 sm:pt-2">
                     <div className="text-slate-400 text-xs sm:text-sm">Fee: ₹{event.price_inr}</div>
                     <Link 
-                      href={event.id === 'akcomsoc-2025' ? `/akcomsoc-2025` : `/event/${event.id}`} 
+                      href={`/event/${event.id}`} 
                       passHref
                     >
                       <Button variant="primary" className="px-4">Register</Button>

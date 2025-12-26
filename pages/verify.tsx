@@ -5,7 +5,7 @@ import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { toast } from 'react-hot-toast'
-import { Shield, QrCode, CheckCircle, XCircle, LogOut, User, Search, BarChart3, Clock, Volume2, VolumeX, History, Camera, PauseCircle } from 'lucide-react'
+import { Shield, QrCode, CheckCircle, XCircle, LogOut, User, Search, BarChart3, Clock, Volume2, VolumeX, History, Camera, PauseCircle, RotateCw } from 'lucide-react'
 
 export default function Verify() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -22,6 +22,8 @@ export default function Verify() {
   const [scanning, setScanning] = useState(false)
   const [scriptLoaded, setScriptLoaded] = useState(false)
   const [scanCooldown, setScanCooldown] = useState(0)
+  const [cameras, setCameras] = useState<any[]>([])
+  const [currentCameraIndex, setCurrentCameraIndex] = useState(0)
 
   function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -162,10 +164,11 @@ export default function Verify() {
     const startScanner = async () => {
       try {
         html5QrCode = new Html5Qrcode("reader")
-        const cameras = await Html5Qrcode.getCameras()
+        const availableCameras = await Html5Qrcode.getCameras()
         
-        if (cameras && cameras.length) {
-          const cameraId = cameras[0].id
+        if (availableCameras && availableCameras.length) {
+          setCameras(availableCameras)
+          const cameraId = availableCameras[currentCameraIndex]?.id || availableCameras[0].id
           await html5QrCode.start(
             cameraId, 
             { fps: 10, qrbox: { width: 250, height: 250 } }, 
@@ -276,7 +279,7 @@ export default function Verify() {
         } catch (e) {}
       }
     }
-  }, [isAuthenticated, soundEnabled, scanning, playSound, scanCooldown])
+  }, [isAuthenticated, soundEnabled, scanning, playSound, scanCooldown, currentCameraIndex])
 
   const handleStartScanning = async () => {
     try {
@@ -291,6 +294,16 @@ export default function Verify() {
   const handleStopScanning = () => {
     setScanning(false)
     toast('Scanner stopped', { icon: '⏸️' })
+  }
+
+  const handleRotateCamera = () => {
+    if (cameras.length <= 1) {
+      toast.error('No other cameras available')
+      return
+    }
+    const nextIndex = (currentCameraIndex + 1) % cameras.length
+    setCurrentCameraIndex(nextIndex)
+    toast.success(`Switched to ${cameras[nextIndex].label || `Camera ${nextIndex + 1}`}`)
   }
 
   if (!isAuthenticated) {
@@ -388,6 +401,16 @@ export default function Verify() {
             >
               {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </Button>
+            {scanning && cameras.length > 1 && (
+              <Button 
+                onClick={handleRotateCamera} 
+                variant="outline"
+                className="px-2 sm:px-3 py-2 h-8 sm:h-auto"
+                title="Switch Camera"
+              >
+                <RotateCw className="w-4 h-4" />
+              </Button>
+            )}
             {scanning ? (
               <Button onClick={handleStopScanning} variant="outline" className="px-2 sm:px-3 py-2 h-8 sm:h-auto text-xs sm:text-base">
                 <PauseCircle className="w-4 h-4 sm:mr-1" />
