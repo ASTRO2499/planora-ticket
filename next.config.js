@@ -19,9 +19,6 @@ const nextConfig = {
   poweredByHeader: false,
   generateEtags: true,
   
-  // Output configuration
-  output: 'standalone',
-  
   // Experimental features for better performance
   experimental: {
     optimizePackageImports: ['lucide-react', 'framer-motion'],

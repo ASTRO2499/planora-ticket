@@ -5,6 +5,8 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { toast } from 'react-hot-toast'
 import supabase from '../lib/supabaseClient'
+import { Award } from 'lucide-react'
+
 export default function OrganizerDashboard() {
   const [authed, setAuthed] = useState(false)
   const [organizerSecret, setOrganizerSecret] = useState('')
@@ -20,6 +22,12 @@ export default function OrganizerDashboard() {
   const [templateText, setTemplateText] = useState('')
   const [templateError, setTemplateError] = useState<string>('')
   const [templatePreview, setTemplatePreview] = useState<{ brandPrimary?: string; brandAccent?: string; brandDark?: string; headerTitle?: string } | null>(null)
+  const [certificateStats, setCertificateStats] = useState<any>(null)
+  const [generatingCertificates, setGeneratingCertificates] = useState(false)
+  const [driveFolderLink, setDriveFolderLink] = useState('')
+  const [emailContent, setEmailContent] = useState('Dear #name,\n\nCongratulations on successfully completing the event!\n\nWe are pleased to present your certificate of participation for representing #College.\n\nYour certificate is attached with this email.\n\nBest regards,\nEvent Team')
+  const [sendingEmails, setSendingEmails] = useState(false)
+  const [tab, setTab] = useState<'details' | 'certificates'>('details')
 
   function applySampleTemplate(kind: 'cosmic' | 'ocean') {
     const samples: Record<string, any> = {
@@ -257,6 +265,108 @@ export default function OrganizerDashboard() {
     window.open(url, '_blank')
   }
 
+  async function fetchCertificateStats() {
+    if (!selected) return
+    try {
+      const headers: Record<string,string> = {}
+      if (organizerSecret) headers['x-organizer-secret'] = organizerSecret
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+      const res = await fetch(`/api/organizer/certificates?eventId=${encodeURIComponent(selected.id)}`, { headers })
+      if (res.ok) {
+        const data = await res.json()
+        setCertificateStats(data)
+      } else {
+        const errorData = await res.json().catch(() => ({ error: 'unknown' }))
+        console.error('Failed to fetch certificate stats:', res.status, errorData)
+        toast.error('Failed to load certificate stats')
+      }
+    } catch (error) {
+      console.error('Certificate stats error:', error)
+    }
+  }
+
+  async function generateCertificates() {
+    if (!selected) return
+    if (!confirm('Generate certificates for all attendees who checked in? This will create certificates for ' + (certificateStats?.pending || 0) + ' attendees.')) return
+    
+    setGeneratingCertificates(true)
+    try {
+      const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+      if (organizerSecret) headers['x-organizer-secret'] = organizerSecret
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+      
+      const res = await fetch('/api/organizer/certificates', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ eventId: selected.id })
+      })
+      
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(data.message || 'Certificates generated successfully')
+        fetchCertificateStats()
+      } else {
+        console.error('Certificate generation failed:', data)
+        toast.error(data.details || data.error || 'Failed to generate certificates')
+      }
+    } catch (error) {
+      console.error('Certificate generation error:', error)
+      toast.error('Network error generating certificates')
+    } finally {
+      setGeneratingCertificates(false)
+    }
+  }
+
+  async function sendBulkCertificateEmails() {
+    if (!selected) return
+    if (!driveFolderLink.trim()) {
+      toast.error('Please enter the Google Drive folder link')
+      return
+    }
+    if (!emailContent.trim()) {
+      toast.error('Please enter email content')
+      return
+    }
+    if (!confirm('Send certificate emails to all attendees? This will send ' + (certificateStats?.certificates_issued || 0) + ' emails.')) return
+    
+    setSendingEmails(true)
+    try {
+      const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+      if (organizerSecret) headers['x-organizer-secret'] = organizerSecret
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+      
+      const res = await fetch('/api/organizer/send-certificates', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          eventId: selected.id,
+          driveFolderLink,
+          emailContent
+        })
+      })
+      
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(data.message || 'Emails sent successfully')
+      } else {
+        console.error('Email sending failed:', data)
+        toast.error(data.error || 'Failed to send emails')
+      }
+    } catch (error) {
+      console.error('Email sending error:', error)
+      toast.error('Network error sending emails')
+    } finally {
+      setSendingEmails(false)
+    }
+  }
+
+  useEffect(() => {
+    if (selected && tab === 'certificates') {
+      fetchCertificateStats()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, tab])
+
   useEffect(() => {
     // Session persistence: restore organizer session if available
     async function restore() {
@@ -373,7 +483,9 @@ export default function OrganizerDashboard() {
               <div className="text-slate-400">Select an event to edit.</div>
             ) : (
               <div className="space-y-3">
-                <h2 className="text-xl font-bold text-white">Edit Event</h2>
+                {tab === 'details' && (
+                  <div className="space-y-3">
+                    <h2 className="text-xl font-bold text-white">Edit Event</h2>
                 <Input value={selected.title || ''} onChange={(e)=>setSelected({...selected, title:e.target.value})} placeholder="Title" />
                 <Input value={selected.description || ''} onChange={(e)=>setSelected({...selected, description:e.target.value})} placeholder="Description" />
                 <div className="grid grid-cols-2 gap-2">
@@ -420,7 +532,7 @@ export default function OrganizerDashboard() {
                       <Button type="button" variant="ghost" onClick={() => applySampleTemplate('ocean')}>Sample: Ocean</Button>
                     </div>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1">Note: PDF preview uses the last saved template. Click "Save Template" to apply changes.</p>
+                  <p className="text-[11px] text-slate-500 mt-1">Note: PDF preview uses the last saved template. Click &quot;Save Template&quot; to apply changes.</p>
 
                   {templatePreview && (
                     <div className="mt-4 border border-white/10 rounded-xl overflow-hidden">
@@ -445,6 +557,87 @@ export default function OrganizerDashboard() {
                     </div>
                   )}
                 </div>
+                  </div>
+                )}
+
+                {tab === 'certificates' && (
+                  <div className="space-y-6">
+                    {certificateStats && (
+                      <div className="p-4 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-xl">
+                        <h3 className="text-lg font-semibold text-white mb-3">Event Certificates</h3>
+                        <div className="grid grid-cols-3 gap-3 mb-4">
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-white">{certificateStats.total_attended}</div>
+                            <div className="text-xs text-slate-400">Attended</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-green-400">{certificateStats.certificates_issued}</div>
+                            <div className="text-xs text-slate-400">Issued</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-amber-400">{certificateStats.pending}</div>
+                            <div className="text-xs text-slate-400">Pending</div>
+                          </div>
+                        </div>
+                        <Button 
+                          onClick={generateCertificates} 
+                          isLoading={generatingCertificates}
+                          disabled={certificateStats.pending === 0}
+                          className="w-full"
+                          variant="cosmic"
+                        >
+                          {certificateStats.pending > 0 ? `Generate ${certificateStats.pending} Certificates` : 'All Certificates Generated'}
+                        </Button>
+                        <p className="text-xs text-slate-500 mt-2">Certificates are only generated for attendees who checked in at the event.</p>
+                      </div>
+                    )}
+
+                    <div className="p-4 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border border-blue-500/20 rounded-xl">
+                      <h3 className="text-lg font-semibold text-white mb-2">Send Certificates via Email</h3>
+                      <p className="text-slate-400 text-xs mb-3">
+                        Send certificates to all attendees. Upload certificates to Google Drive and provide the folder link. Certificates will be matched by attendee name.
+                      </p>
+                      
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-sm text-slate-300 mb-1 block">Google Drive Folder Link</label>
+                          <Input
+                            placeholder="https://drive.google.com/drive/folders/..."
+                            value={driveFolderLink}
+                            onChange={(e) => setDriveFolderLink(e.target.value)}
+                            className="w-full"
+                          />
+                          <p className="text-xs text-slate-500 mt-1">Make sure the folder is publicly accessible</p>
+                        </div>
+
+                        <div>
+                          <label className="text-sm text-slate-300 mb-1 block">Email Content Template</label>
+                          <p className="text-xs text-slate-400 mb-1">Use variables: #name, #College, #event</p>
+                          <textarea
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm min-h-[120px]"
+                            value={emailContent}
+                            onChange={(e) => setEmailContent(e.target.value)}
+                            placeholder="Dear #name, Congratulations!"
+                          />
+                        </div>
+
+                        <Button
+                          onClick={sendBulkCertificateEmails}
+                          isLoading={sendingEmails}
+                          disabled={sendingEmails || !certificateStats?.certificates_issued}
+                          className="w-full"
+                          variant="primary"
+                        >
+                          {sendingEmails ? 'Sending Emails...' : `Send to ${certificateStats?.certificates_issued || 0} Recipients`}
+                        </Button>
+                        
+                        <p className="text-xs text-slate-500">
+                          Emails will be sent to attendees who have certificates.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </Card>
@@ -584,6 +777,20 @@ export default function OrganizerDashboard() {
             </div>
           </Card>
         )}
+
+        {/* Floating Certificates Button */}
+        <div className="fixed left-3 bottom-6 z-50">
+          <Button
+            variant={tab === 'certificates' ? 'primary' : 'cosmic'}
+            size="sm"
+            className="rounded-full w-10 h-10 p-0 shadow-lg shadow-black/20"
+            title={tab === 'certificates' ? 'Back to Details' : 'Open Certificates'}
+            aria-label={tab === 'certificates' ? 'Back to Details' : 'Open Certificates'}
+            onClick={() => setTab(tab === 'certificates' ? 'details' : 'certificates')}
+          >
+            <Award className="w-5 h-5" />
+          </Button>
+        </div>
       </div>
     </div>
   )

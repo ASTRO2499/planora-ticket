@@ -19,7 +19,7 @@ export default function Header() {
     <header className="glass soft-border sticky top-0 z-40 backdrop-blur-xl">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 sm:gap-3">
-          <div className="hidden sm:block">
+          <div className="block">
             <div className="text-lg sm:text-2xl md:text-3xl font-black leading-none text-white tracking-widest" style={{ fontFamily: 'Sora, sans-serif' }}>PLANORA</div>
             <div className="text-xs text-strong-accent flex items-center gap-2"> 
               <span className="px-2 py-0.5 text-[10px] rounded-full bg-white/6 text-strong">TICKETS</span>

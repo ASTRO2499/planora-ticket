@@ -60,7 +60,7 @@ export default function EventPage() {
           name,
           email,
           eventId: id,
-          amount: event.price_inr
+          amount: Math.round(Number(event.price_inr) * 100)
         })
       })
       const data = await res.json()

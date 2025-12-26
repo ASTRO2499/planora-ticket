@@ -100,9 +100,28 @@ export default function TicketPage() {
                   >
                     <span className="flex items-center justify-center gap-2">
                       <Download className="w-4 h-4" />
-                      Download PDF
+                      Download Ticket PDF
                     </span>
                   </a>
+                  
+                  {ticket.used && ticket.certificate_issued && (
+                    <a 
+                      href={`/api/certificate-pdf?ticketId=${ticket.id}`}
+                      download
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all duration-200 text-center"
+                      style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+                    >
+                      <span className="flex items-center justify-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                        </svg>
+                        Download Certificate
+                      </span>
+                    </a>
+                  )}
+                  
                   <Link 
                     href="/my-tickets"
                     className="block w-full px-6 py-3 bg-slate-700/50 hover:bg-slate-600/50 text-slate-200 font-semibold rounded-xl transition-all duration-200 text-center border border-slate-600/50"

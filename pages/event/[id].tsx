@@ -96,7 +96,7 @@ export default function EventRegistrationPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: event.price_inr,
+          amount: Math.round(Number(event.price_inr) * 100),
           eventId: event.id,
           name,
           email,
