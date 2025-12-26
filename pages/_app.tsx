@@ -4,7 +4,7 @@ import Layout from '../components/Layout'
 import { Toaster } from 'react-hot-toast'
 import { Analytics } from '@vercel/analytics/next'
 import { useEffect } from 'react'
-import clarity from '@microsoft/clarity'
+import { initClarity } from '../lib/clarity'
 
 export default function MyApp({ Component, pageProps }: AppProps) {
   const gpt5Enabled = process.env.NEXT_PUBLIC_ENABLE_GPT5 === 'true'
@@ -12,8 +12,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
     process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID || 'urc12d1xth'
 
   useEffect(() => {
-    if (!clarityProjectId) return
-    clarity.init(clarityProjectId)
+    initClarity(clarityProjectId)
   }, [clarityProjectId])
 
   return (
