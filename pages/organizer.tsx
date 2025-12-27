@@ -986,6 +986,7 @@ export default function OrganizerDashboard() {
 
 function SimpleFormBuilder({ eventId, organizerSecret, accessToken }: { eventId: string; organizerSecret: string; accessToken: string }) {
   const [loading, setLoading] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
   const [config, setConfig] = useState<any>({ base: { phone: { label: 'Phone Number' }, college: { label: 'College/Institution' }, ieee: { label: 'IEEE Membership Number' } }, extras: [] })
 
   useEffect(() => {
@@ -1035,8 +1036,8 @@ function SimpleFormBuilder({ eventId, organizerSecret, accessToken }: { eventId:
         body: JSON.stringify({ field_config: config })
       })
       if (res.ok) {
-        setShowSuccessAnimation(true)
-        setTimeout(() => setShowSuccessAnimation(false), 2000)
+        setShowSuccess(true)
+        setTimeout(() => setShowSuccess(false), 2000)
         toast.success('Form settings saved')
       }
       else toast.error('Failed to save form settings')
@@ -1048,6 +1049,7 @@ function SimpleFormBuilder({ eventId, organizerSecret, accessToken }: { eventId:
 
   return (
     <div className="space-y-4">
+      <SuccessAnimation isVisible={showSuccess} message="Form settings saved successfully!" />
       <div className="grid sm:grid-cols-3 gap-3">
         {['phone','college','ieee'].map((key) => (
           <div key={key} className="bg-white/5 border border-white/10 rounded-xl p-3">

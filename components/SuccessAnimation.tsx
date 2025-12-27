@@ -15,8 +15,13 @@ export default function SuccessAnimation({ isVisible, message = 'Success!', dura
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 flex items-center justify-center z-[9999] pointer-events-none"
+          className="fixed inset-0 flex items-center justify-center z-[9999] pointer-events-none bg-gradient-to-br from-[#050d25]/95 via-[#081a3c]/90 to-[#020a17]/95 backdrop-blur-md"
         >
+          <div className="absolute inset-0">
+            <div className="absolute -left-20 top-10 h-48 w-48 rounded-full bg-cyan-500/15 blur-3xl" />
+            <div className="absolute right-6 bottom-10 h-60 w-60 rounded-full bg-indigo-500/20 blur-3xl" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.05),transparent_22%),radial-gradient(circle_at_80%_0%,rgba(255,255,255,0.04),transparent_18%),radial-gradient(circle_at_50%_80%,rgba(255,255,255,0.03),transparent_20%)]" />
+          </div>
           <motion.div
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
