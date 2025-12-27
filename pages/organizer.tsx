@@ -6,6 +6,7 @@ import { Input } from '../components/ui/Input'
 import { toast } from 'react-hot-toast'
 import supabase from '../lib/supabaseClient'
 import { Award, Edit2 } from 'lucide-react'
+import SuccessAnimation from '../components/SuccessAnimation'
 
 export default function OrganizerDashboard() {
   const [authed, setAuthed] = useState(false)
@@ -28,9 +29,11 @@ export default function OrganizerDashboard() {
   const [emailContent, setEmailContent] = useState('Dear #name,\n\nCongratulations on successfully completing the event!\n\nWe are pleased to present your certificate of participation for representing #College.\n\nYour certificate is attached with this email.\n\nBest regards,\nEvent Team')
   const [sendingEmails, setSendingEmails] = useState(false)
   const [tab, setTab] = useState<'details' | 'certificates'>('details')
+  const [showFormBuilder, setShowFormBuilder] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<any>({})
   const [editLoading, setEditLoading] = useState(false)
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false)
 
   function applySampleTemplate(kind: 'cosmic' | 'ocean') {
     const samples: Record<string, any> = {
@@ -433,6 +436,7 @@ export default function OrganizerDashboard() {
       }
     }
     restore()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -467,7 +471,8 @@ export default function OrganizerDashboard() {
     }
     preloadTemplate()
     return () => { abort = true }
-  }, [selected?.id, organizerSecret, accessToken])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id])
 
   if (!authed) {
     return (
@@ -511,8 +516,21 @@ export default function OrganizerDashboard() {
   return (
     <div className="min-h-screen p-6">
       <Head><title>Organizer Dashboard</title></Head>
+      <SuccessAnimation isVisible={showSuccessAnimation} message="Form settings saved successfully!" />
       <div className="max-w-6xl mx-auto space-y-6">
-        <h1 className="text-3xl font-bold text-white">Manage Events</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-white">Manage Events</h1>
+          {selected && (
+            <Button
+              variant={showFormBuilder ? 'primary' : 'outline'}
+              size="sm"
+              onClick={() => setShowFormBuilder(!showFormBuilder)}
+              title="Registration Form Builder"
+            >
+              {showFormBuilder ? 'Close Form Builder' : 'Edit Form'}
+            </Button>
+          )}
+        </div>
         <div className="grid md:grid-cols-2 gap-6">
           <Card className="p-6 bg-white/5 border-white/10">
             <h2 className="text-xl font-bold text-white mb-4">Your Events</h2>
@@ -786,17 +804,59 @@ export default function OrganizerDashboard() {
                 <Button
                   variant="cosmic"
                   onClick={() => {
-                    if (!tickets.length) return toast.error('No attendees to export')
-                    const filtered = filteredTickets
-                    const headers = ['Name','Email','Status','Used','Created']
-                    const rows = filtered.map(t => [t.name, t.email, t.status || '', t.used ? 'Yes' : 'No', new Date(t.created_at).toISOString()])
-                    const csv = [headers, ...rows].map(r => r.map(c => `"${c ?? ''}"`).join(',')).join('\n')
-                    const blob = new Blob([csv], { type: 'text/csv' })
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = `attendees-${selected.id}.csv`
-                    a.click()
+                    const eventId = selected?.id
+                    if (!eventId) return
+                    let url = `/api/admin/export-csv?eventId=${encodeURIComponent(eventId)}`
+                    // Add auth headers via fetch
+                    const headers: Record<string, string> = {}
+                    if (organizerSecret?.trim()) {
+                      headers['x-organizer-secret'] = organizerSecret.trim()
+                    }
+                    if (accessToken?.trim()) {
+                      headers['Authorization'] = `Bearer ${accessToken.trim()}`
+                    }
+                    
+                    console.log('Export CSV - organizerSecret:', !!organizerSecret?.trim(), 'accessToken:', !!accessToken?.trim(), 'headers:', headers)
+                    
+                    if (!organizerSecret?.trim() && !accessToken?.trim()) {
+                      toast.error('Not authenticated. Please login again.')
+                      return
+                    }
+                    
+                    fetch(url, { 
+                      method: 'GET',
+                      headers,
+                      credentials: 'include' 
+                    })
+                      .then(async res => {
+                        console.log('CSV response status:', res.status, res.ok)
+                        if (!res.ok) {
+                          const text = await res.text()
+                          console.error('CSV error response:', text)
+                          let errMsg = `HTTP ${res.status}`
+                          try {
+                            const errData = JSON.parse(text)
+                            errMsg = errData.error || errMsg
+                          } catch {}
+                          throw new Error(errMsg)
+                        }
+                        return res.blob()
+                      })
+                      .then(blob => {
+                        const downloadUrl = window.URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = downloadUrl
+                        a.download = `event-${eventId}-tickets.csv`
+                        document.body.appendChild(a)
+                        a.click()
+                        window.URL.revokeObjectURL(downloadUrl)
+                        document.body.removeChild(a)
+                        toast.success('CSV exported successfully')
+                      })
+                      .catch(err => {
+                        console.error('Export error:', err)
+                        toast.error('Export failed: ' + err.message)
+                      })
                   }}
                 >Export CSV</Button>
               </div>
@@ -904,6 +964,164 @@ export default function OrganizerDashboard() {
             <Award className="w-5 h-5" />
           </Button>
         </div>
+
+        {/* Form Builder Modal */}
+        {showFormBuilder && selected && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+            <Card className="w-full max-w-5xl max-h-[90vh] overflow-y-auto bg-slate-900/95 border-white/20">
+              <div className="sticky top-0 bg-slate-900 border-b border-white/10 p-6 flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-white">Registration Form Builder</h2>
+                <Button variant="ghost" onClick={() => setShowFormBuilder(false)}>✕</Button>
+              </div>
+              <div className="p-6">
+                <SimpleFormBuilder eventId={selected.id} organizerSecret={organizerSecret} accessToken={accessToken} />
+              </div>
+            </Card>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function SimpleFormBuilder({ eventId, organizerSecret, accessToken }: { eventId: string; organizerSecret: string; accessToken: string }) {
+  const [loading, setLoading] = useState(false)
+  const [config, setConfig] = useState<any>({ base: { phone: { label: 'Phone Number' }, college: { label: 'College/Institution' }, ieee: { label: 'IEEE Membership Number' } }, extras: [] })
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/organizer/form-settings?eventId=${encodeURIComponent(eventId)}`, {
+          headers: {
+            ...(organizerSecret ? { 'x-organizer-secret': organizerSecret } : {}),
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          }
+        })
+        const data = await res.json()
+        const cfg = data?.settings?.field_config || {}
+        if (!cfg.extras) cfg.extras = []
+        setConfig(cfg)
+      } catch {}
+      setLoading(false)
+    }
+    load()
+  }, [eventId, accessToken, organizerSecret])
+
+  function updateBase(key: string, patch: any) {
+    setConfig((prev: any) => ({ ...prev, base: { ...(prev.base || {}), [key]: { ...(prev.base?.[key] || {}), ...patch } } }))
+  }
+  function updateExtra(idx: number, patch: any) {
+    setConfig((prev: any) => {
+      const arr = [...(prev.extras || [])]
+      arr[idx] = { ...(arr[idx] || {}), ...patch }
+      return { ...prev, extras: arr }
+    })
+  }
+  function addExtra() {
+    setConfig((prev: any) => ({ ...prev, extras: ([...(prev.extras || [])].concat({ label: `Extra Field ${((prev.extras||[]).length+1)}`, type: 'text', required: false, options: [] })).slice(0,5) }))
+  }
+
+  async function save() {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/organizer/form-settings?eventId=${encodeURIComponent(eventId)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(organizerSecret ? { 'x-organizer-secret': organizerSecret } : {}),
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ field_config: config })
+      })
+      if (res.ok) {
+        setShowSuccessAnimation(true)
+        setTimeout(() => setShowSuccessAnimation(false), 2000)
+        toast.success('Form settings saved')
+      }
+      else toast.error('Failed to save form settings')
+    } catch {
+      toast.error('Network error')
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid sm:grid-cols-3 gap-3">
+        {['phone','college','ieee'].map((key) => (
+          <div key={key} className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="text-xs text-slate-400 mb-1">{key.toUpperCase()} Label</div>
+            <Input value={config?.base?.[key]?.label || ''} onChange={(e)=>updateBase(key, { label: e.target.value })} />
+            <div className="flex items-center gap-2 mt-2">
+              <label className="text-xs text-slate-400">Required</label>
+              <input type="checkbox" checked={!!config?.base?.[key]?.required} onChange={(e)=>updateBase(key, { required: e.target.checked })} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between">
+        <h3 className="text-white font-semibold">Extra Fields</h3>
+        <Button variant="outline" onClick={addExtra} disabled={(config?.extras?.length || 0) >= 5}>Add Extra</Button>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-3">
+        {(config.extras || []).slice(0,5).map((f: any, idx: number) => (
+          <div key={idx} className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className="text-xs text-slate-400 mb-1">Label</div>
+                <Input value={f?.label || ''} onChange={(e)=>updateExtra(idx, { label: e.target.value })} />
+              </div>
+              <div>
+                <div className="text-xs text-slate-400 mb-1">Type</div>
+                <select className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-white text-sm" value={f?.type || 'text'} onChange={(e)=>updateExtra(idx, { type: e.target.value })}>
+                  <option value="text">Text</option>
+                  <option value="select">Dropdown</option>
+                  <option value="yes_no">Yes/No</option>
+                </select>
+              </div>
+            </div>
+            {f?.type === 'select' && (
+              <div className="mt-2 space-y-2">
+                <div className="text-xs text-slate-400">Options</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Input 
+                      placeholder="Option 1" 
+                      value={(f?.options || [])[0] || ''} 
+                      onChange={(e) => {
+                        const opts = [...(f?.options || [])]
+                        opts[0] = e.target.value
+                        updateExtra(idx, { options: opts.filter(Boolean) })
+                      }} 
+                    />
+                  </div>
+                  <div>
+                    <Input 
+                      placeholder="Option 2" 
+                      value={(f?.options || [])[1] || ''} 
+                      onChange={(e) => {
+                        const opts = [...(f?.options || [])]
+                        opts[1] = e.target.value
+                        updateExtra(idx, { options: opts.filter(Boolean) })
+                      }} 
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-2 mt-2">
+              <label className="text-xs text-slate-400">Required</label>
+              <input type="checkbox" checked={!!f?.required} onChange={(e)=>updateExtra(idx, { required: e.target.checked })} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={save} isLoading={loading}>Save Form Settings</Button>
       </div>
     </div>
   )

@@ -43,6 +43,8 @@ export default function EventRegistrationPage() {
   const [phone, setPhone] = useState('')
   const [college, setCollege] = useState('')
   const [ieee, setIeee] = useState('')
+  const [formSettings, setFormSettings] = useState<any>(null)
+  const [extras, setExtras] = useState<string[]>(['', '', '', '', ''])
 
   useEffect(() => {
     if (!id) return
@@ -68,6 +70,19 @@ export default function EventRegistrationPage() {
     }
     
     fetchEvent()
+    async function fetchSettings() {
+      try {
+        const res = await fetch(`/api/event/form-settings?eventId=${encodeURIComponent(String(id))}`)
+        if (res.ok) {
+          const data = await res.json()
+          setFormSettings(data.settings?.field_config || {})
+          // Initialize extras length up to 5
+          const defs: any[] = (data.settings?.field_config?.extras || []).slice(0, 5)
+          setExtras((prev) => defs.map(() => '') as string[])
+        }
+      } catch {}
+    }
+    fetchSettings()
   }, [id])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -114,6 +129,13 @@ export default function EventRegistrationPage() {
       const orderData = await orderRes.json()
 
       // Open Razorpay
+      // Prepare extras array based on settings order
+      const extraValues: string[] = []
+      const defs: any[] = (formSettings?.extras || []).slice(0, 5)
+      for (let i = 0; i < defs.length; i++) {
+        extraValues.push(extras[i] || '')
+      }
+
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_Rry2rwBqAIzSSw',
         amount: event.price_inr * 100,
@@ -139,7 +161,8 @@ export default function EventRegistrationPage() {
                   email,
                   phone,
                   college,
-                  ieee
+                  ieee,
+                  extras: extraValues
                 }
               })
             })
@@ -411,7 +434,7 @@ export default function EventRegistrationPage() {
               </div>
 
               <div>
-                <label className="text-sm text-slate-300 mb-1 block">Phone Number</label>
+                <label className="text-sm text-slate-300 mb-1 block">{formSettings?.base?.phone?.label || 'Phone Number'}</label>
                 <Input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
@@ -421,7 +444,7 @@ export default function EventRegistrationPage() {
               </div>
 
               <div>
-                <label className="text-sm text-slate-300 mb-1 block">College/Institution</label>
+                <label className="text-sm text-slate-300 mb-1 block">{formSettings?.base?.college?.label || 'College/Institution'}</label>
                 <Input
                   value={college}
                   onChange={(e) => setCollege(e.target.value)}
@@ -431,7 +454,7 @@ export default function EventRegistrationPage() {
               </div>
 
               <div>
-                <label className="text-sm text-slate-300 mb-1 block">IEEE Membership Number</label>
+                <label className="text-sm text-slate-300 mb-1 block">{formSettings?.base?.ieee?.label || 'IEEE Membership Number'}</label>
                 <Input
                   value={ieee}
                   onChange={(e) => setIeee(e.target.value)}
@@ -439,6 +462,49 @@ export default function EventRegistrationPage() {
                   disabled={submitting}
                 />
               </div>
+
+              {/* Extra fields (up to 5) */}
+              {(formSettings?.extras || []).slice(0,5).map((f: any, idx: number) => (
+                <div key={idx}>
+                  <label className="text-sm text-slate-300 mb-1 block">{f?.label || `Extra Field ${idx+1}`}{f?.required ? ' *' : ''}</label>
+                  {f?.type === 'select' ? (
+                    <select
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm"
+                      value={extras[idx] || ''}
+                      onChange={(e) => {
+                        const arr = [...extras]; arr[idx] = e.target.value; setExtras(arr)
+                      }}
+                      disabled={submitting}
+                      required={!!f?.required}
+                    >
+                      <option value="">Select</option>
+                      {(f?.options || []).map((opt: string, i: number) => (
+                        <option key={i} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  ) : f?.type === 'yes_no' ? (
+                    <select
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm"
+                      value={extras[idx] || ''}
+                      onChange={(e) => { const arr = [...extras]; arr[idx] = e.target.value; setExtras(arr) }}
+                      disabled={submitting}
+                      required={!!f?.required}
+                    >
+                      <option value="">Select</option>
+                      <option value="Yes">Yes</option>
+                      <option value="No">No</option>
+                    </select>
+                  ) : (
+                    <Input
+                      value={extras[idx] || ''}
+                      onChange={(e) => { const arr = [...extras]; arr[idx] = e.target.value; setExtras(arr) }}
+                      placeholder={f?.placeholder || ''}
+                      disabled={submitting}
+                      required={!!f?.required}
+                    />
+                  )}
+                </div>
+              ))}
 
               <div className="pt-3 sm:pt-4">
                 <Button

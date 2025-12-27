@@ -96,6 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const phone = (metadata?.phone || '').trim()
   const college = (metadata?.college || '').trim()
   const ieee = (metadata?.ieee || '').trim()
+  const extras: Array<string> = Array.isArray(metadata?.extras) ? metadata.extras.slice(0, 5) : []
   if (!name || !email) return res.status(400).json({ error: 'missing_user_details' })
 
   const baseUrl = process.env.BASE_URL || 'http://localhost:3000'
@@ -128,6 +129,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       phone,
       college,
       ieee,
+      extra1: extras[0] || null,
+      extra2: extras[1] || null,
+      extra3: extras[2] || null,
+      extra4: extras[3] || null,
+      extra5: extras[4] || null,
       event_id: metadata?.eventId || null,
       payment_id: paymentId,
       razorpay_order_id,
