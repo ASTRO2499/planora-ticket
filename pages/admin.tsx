@@ -4,7 +4,7 @@ import { toast } from 'react-hot-toast'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
-import { ShieldCheck, LogOut, Search, CheckCircle, XCircle, Trash2, Mail, Download, TrendingUp, Users, DollarSign } from 'lucide-react'
+import { ShieldCheck, LogOut, Search, CheckCircle, XCircle, Trash2, Mail, Download, TrendingUp, Users, DollarSign, Edit2, X } from 'lucide-react'
 
 type AuthState = 'unknown' | 'authenticated' | 'unauthenticated'
 
@@ -17,6 +17,15 @@ export default function AdminPage() {
   const [stats, setStats] = useState<any>(null)
   const [eventFilter, setEventFilter] = useState('ALL')
   const [events, setEvents] = useState<any[]>([])
+  const [viewFilter, setViewFilter] = useState<'all'|'checked'|'remaining'>('all')
+  const [certStats, setCertStats] = useState<any>(null)
+  const [generating, setGenerating] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [driveLink, setDriveLink] = useState('')
+  const [emailTpl, setEmailTpl] = useState('Dear #name,\n\nCongratulations on participating in #event. Your certificate is attached / available at the link.\n\nBest regards,\nEvent Team')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<any>({})
+  const [editLoading, setEditLoading] = useState(false)
   const isAuthed = authState === 'authenticated'
 
   const search = useCallback(async (e?: React.FormEvent<HTMLFormElement>) => {
@@ -24,7 +33,7 @@ export default function AdminPage() {
     if (!isAuthed) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/admin/tickets?q=${encodeURIComponent(q)}&eventId=${encodeURIComponent(eventFilter)}`)
+      const res = await fetch(`/api/admin/tickets?q=${encodeURIComponent(q)}&eventId=${encodeURIComponent(eventFilter)}&status=${encodeURIComponent(viewFilter)}`)
       if (!res.ok) {
         if (res.status === 403) setAuthState('unauthenticated')
         return
@@ -34,7 +43,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false)
     }
-  }, [isAuthed, q, eventFilter])
+  }, [isAuthed, q, eventFilter, viewFilter])
 
   const loadStats = useCallback(async () => {
     try {
@@ -76,7 +85,25 @@ export default function AdminPage() {
     }
     loadEvents()
   }, [])
-  useEffect(() => { if (isAuthed) { search(); loadStats() } }, [eventFilter, isAuthed])
+  useEffect(() => { if (isAuthed) { search(); loadStats() } }, [eventFilter, viewFilter, isAuthed])
+
+  // Certificates: fetch stats for selected event
+  useEffect(() => {
+    async function loadCertStats() {
+      if (!isAuthed) return
+      if (!eventFilter || eventFilter === 'ALL') { setCertStats(null); return }
+      try {
+        const res = await fetch(`/api/admin/certificates?eventId=${encodeURIComponent(eventFilter)}`)
+        if (res.ok) {
+          const data = await res.json()
+          setCertStats(data)
+        }
+      } catch (err) {
+        console.error('Cert stats error', err)
+      }
+    }
+    loadCertStats()
+  }, [isAuthed, eventFilter])
 
   async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -132,6 +159,46 @@ export default function AdminPage() {
     }
   }
 
+  
+
+  
+
+  async function generateCertificates() {
+    if (!isAuthed) return
+    if (!eventFilter || eventFilter === 'ALL') return toast.error('Select an event first')
+    if (!confirm('Generate certificates for checked-in attendees?')) return
+    setGenerating(true)
+    try {
+      const res = await fetch('/api/admin/certificates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: eventFilter }) })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(data.message || 'Certificates generated')
+        setCertStats(null)
+        await loadStats()
+      } else {
+        toast.error(data.error || 'Failed to generate')
+      }
+    } finally { setGenerating(false) }
+  }
+
+  async function sendBulkCertificates() {
+    if (!isAuthed) return
+    if (!eventFilter || eventFilter === 'ALL') return toast.error('Select an event first')
+    if (!driveLink.trim()) return toast.error('Enter Google Drive folder link')
+    if (!emailTpl.trim()) return toast.error('Enter email content')
+    if (!confirm('Send certificate emails to all attendees with certificates?')) return
+    setSending(true)
+    try {
+      const res = await fetch('/api/admin/send-certificates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: eventFilter, driveFolderLink: driveLink, emailContent: emailTpl }) })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(data.message || `Emails sent: ${data.sent || 0}`)
+      } else {
+        toast.error(data.error || 'Failed to send emails')
+      }
+    } finally { setSending(false) }
+  }
+
   async function resendEmail(id: string) {
     if (!isAuthed) return
     const res = await fetch('/api/admin/tickets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action: 'resend' }) })
@@ -140,6 +207,47 @@ export default function AdminPage() {
     } else {
       toast.error('Resend failed')
     }
+  }
+
+  async function startEdit(ticket: any) {
+    setEditingId(ticket.id)
+    setEditForm({
+      name: ticket.name || '',
+      email: ticket.email || '',
+      phone: ticket.phone || '',
+      college: ticket.college || '',
+      ieee: ticket.ieee || ''
+    })
+  }
+
+  async function saveEdit(id: string) {
+    if (!isAuthed) return
+    setEditLoading(true)
+    try {
+      const res = await fetch('/api/admin/tickets', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...editForm })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success('Delegate updated')
+        setEditingId(null)
+        setEditForm({})
+        await search()
+      } else {
+        toast.error(data.error || 'Update failed')
+      }
+    } catch (e) {
+      toast.error('Network error')
+    } finally {
+      setEditLoading(false)
+    }
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditForm({})
   }
 
   function exportCSV() {
@@ -211,6 +319,12 @@ export default function AdminPage() {
               {events.map(ev => (
                 <option key={ev.id} value={ev.id}>{ev.title}</option>
               ))}
+            </select>
+            <label className="text-sm text-slate-400 ml-4">View</label>
+            <select value={viewFilter} onChange={e=>setViewFilter(e.target.value as any)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white">
+              <option value="all">All Delegates</option>
+              <option value="checked">Checked-in Delegates</option>
+              <option value="remaining">Remaining Delegates</option>
             </select>
           </div>
 
@@ -330,6 +444,78 @@ export default function AdminPage() {
             </Card>
           )}
 
+          {eventFilter !== 'ALL' && (
+            <Card className="p-6 bg-white/5 border-white/5">
+              <h3 className="text-white font-semibold mb-3">Certificates</h3>
+              {certStats ? (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                  <Card className="p-4 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/20">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-green-500/20 rounded-lg">
+                        <CheckCircle className="w-5 h-5 text-green-400" />
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-white">{certStats.total_attended}</div>
+                        <div className="text-xs text-slate-400">Attended</div>
+                      </div>
+                    </div>
+                  </Card>
+                  <Card className="p-4 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/20">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-blue-500/20 rounded-lg">
+                        <TrendingUp className="w-5 h-5 text-blue-400" />
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-white">{certStats.certificates_issued}</div>
+                        <div className="text-xs text-slate-400">Certificates Issued</div>
+                      </div>
+                    </div>
+                  </Card>
+                  <Card className="p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/20">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-amber-500/20 rounded-lg">
+                        <Users className="w-5 h-5 text-amber-400" />
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-white">{certStats.pending}</div>
+                        <div className="text-xs text-slate-400">Pending</div>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+              ) : (
+                <p className="text-slate-400 text-sm mb-4">Select an event to view certificate stats.</p>
+              )}
+
+              <div className="flex flex-wrap gap-3 mb-4">
+                <Button onClick={generateCertificates} isLoading={generating} variant="primary" className="h-10">
+                  Generate Certificates
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                <Input
+                  label="Google Drive Folder Link"
+                  placeholder="https://drive.google.com/drive/folders/..."
+                  value={driveLink}
+                  onChange={e => setDriveLink(e.target.value)}
+                />
+                <div className="w-full space-y-1.5">
+                  <label className="text-sm font-medium text-white/80 ml-1">Email Content</label>
+                  <textarea
+                    className="flex w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-sm placeholder:text-white/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 focus-visible:border-primary/50 disabled:cursor-not-allowed disabled:opacity-50 transition-all text-white h-32"
+                    value={emailTpl}
+                    onChange={e => setEmailTpl(e.target.value)}
+                  />
+                  <p className="text-xs text-slate-400 ml-1">Placeholders: #name, #College, #event</p>
+                </div>
+                <Button onClick={sendBulkCertificates} isLoading={sending} variant="primary" className="h-10">
+                  Send Bulk Emails
+                </Button>
+              </div>
+            </Card>
+          )}
+
           <Card className="p-6 bg-white/5 border-white/5">
             <form onSubmit={search} className="flex gap-4">
               <div className="flex-1">
@@ -361,32 +547,79 @@ export default function AdminPage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-surface hover:bg-surface-hover border border-white/5 rounded-xl p-4 flex items-start justify-between transition-colors"
               >
-                <div className="space-y-2 text-sm text-slate-300">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs text-primary bg-primary/10 px-2 py-0.5 rounded">{t.id}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded uppercase font-bold ${t.used ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
-                      {t.used ? 'USED' : 'VALID'}
-                    </span>
+                {editingId === t.id ? (
+                  <div className="w-full space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Name"
+                        value={editForm.name}
+                        onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                      />
+                      <Input
+                        placeholder="Email"
+                        type="email"
+                        value={editForm.email}
+                        onChange={e => setEditForm({ ...editForm, email: e.target.value })}
+                      />
+                      <Input
+                        placeholder="Phone"
+                        value={editForm.phone}
+                        onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                      />
+                      <Input
+                        placeholder="College"
+                        value={editForm.college}
+                        onChange={e => setEditForm({ ...editForm, college: e.target.value })}
+                      />
+                      <Input
+                        placeholder="IEEE ID"
+                        value={editForm.ieee}
+                        onChange={e => setEditForm({ ...editForm, ieee: e.target.value })}
+                        className="col-span-2"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={() => saveEdit(t.id)} isLoading={editLoading} variant="primary" className="h-9 px-3 text-xs">
+                        Save
+                      </Button>
+                      <Button onClick={cancelEdit} variant="ghost" className="h-9 px-3 text-xs">
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
-                  <div className="font-medium text-white">{t.name}</div>
-                  <div className="text-slate-400">{t.email}</div>
-                  <div className="flex flex-wrap gap-3 text-xs text-slate-400">
-                    {t.phone && <span className="px-2 py-0.5 rounded bg-white/5">📞 {t.phone}</span>}
-                    {t.college && <span className="px-2 py-0.5 rounded bg-white/5">🏫 {t.college}</span>}
-                    {t.ieee && <span className="px-2 py-0.5 rounded bg-white/5">IEEE: {t.ieee}</span>}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={() => toggle(t.id)} variant="ghost" className="h-9 text-xs px-3">
-                    {t.used ? 'Mark Valid' : 'Mark Used'}
-                  </Button>
-                  <Button onClick={() => resendEmail(t.id)} variant="ghost" className="h-9 px-2" title="Resend Email">
-                    <Mail className="w-4 h-4 text-blue-400" />
-                  </Button>
-                  <Button onClick={() => deleteTicket(t.id)} variant="ghost" className="h-9 px-2" title="Delete Ticket">
-                    <Trash2 className="w-4 h-4 text-red-400" />
-                  </Button>
-                </div>
+                ) : (
+                  <>
+                    <div className="space-y-2 text-sm text-slate-300">
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-xs text-primary bg-primary/10 px-2 py-0.5 rounded">{t.id}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded uppercase font-bold ${t.used ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
+                          {t.used ? 'USED' : 'VALID'}
+                        </span>
+                      </div>
+                      <div className="font-medium text-white">{t.name}</div>
+                      <div className="text-slate-400">{t.email}</div>
+                      <div className="flex flex-wrap gap-3 text-xs text-slate-400">
+                        {t.phone && <span className="px-2 py-0.5 rounded bg-white/5">📞 {t.phone}</span>}
+                        {t.college && <span className="px-2 py-0.5 rounded bg-white/5">🏫 {t.college}</span>}
+                        {t.ieee && <span className="px-2 py-0.5 rounded bg-white/5">IEEE: {t.ieee}</span>}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={() => startEdit(t)} variant="ghost" className="h-9 px-2" title="Edit Delegate">
+                        <Edit2 className="w-4 h-4 text-amber-400" />
+                      </Button>
+                      <Button onClick={() => toggle(t.id)} variant="ghost" className="h-9 text-xs px-3">
+                        {t.used ? 'Mark Valid' : 'Mark Used'}
+                      </Button>
+                      <Button onClick={() => resendEmail(t.id)} variant="ghost" className="h-9 px-2" title="Resend Email">
+                        <Mail className="w-4 h-4 text-blue-400" />
+                      </Button>
+                      <Button onClick={() => deleteTicket(t.id)} variant="ghost" className="h-9 px-2" title="Delete Ticket">
+                        <Trash2 className="w-4 h-4 text-red-400" />
+                      </Button>
+                    </div>
+                  </>
+                )}
               </motion.div>
             ))}
           </div>

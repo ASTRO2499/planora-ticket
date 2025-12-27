@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { toast } from 'react-hot-toast'
 import supabase from '../lib/supabaseClient'
-import { Award } from 'lucide-react'
+import { Award, Edit2 } from 'lucide-react'
 
 export default function OrganizerDashboard() {
   const [authed, setAuthed] = useState(false)
@@ -28,6 +28,9 @@ export default function OrganizerDashboard() {
   const [emailContent, setEmailContent] = useState('Dear #name,\n\nCongratulations on successfully completing the event!\n\nWe are pleased to present your certificate of participation for representing #College.\n\nYour certificate is attached with this email.\n\nBest regards,\nEvent Team')
   const [sendingEmails, setSendingEmails] = useState(false)
   const [tab, setTab] = useState<'details' | 'certificates'>('details')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<any>({})
+  const [editLoading, setEditLoading] = useState(false)
 
   function applySampleTemplate(kind: 'cosmic' | 'ocean') {
     const samples: Record<string, any> = {
@@ -54,6 +57,7 @@ export default function OrganizerDashboard() {
   const [tickets, setTickets] = useState<any[]>([])
   const [ticketsLoading, setTicketsLoading] = useState(false)
   const [ticketQuery, setTicketQuery] = useState('')
+  const [viewFilter, setViewFilter] = useState<'all'|'checked'|'remaining'>('all')
   const [analytics, setAnalytics] = useState<any>(null)
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
 
@@ -147,7 +151,7 @@ export default function OrganizerDashboard() {
       const headers: Record<string, string> = {}
       if (organizerSecret) headers['x-organizer-secret'] = organizerSecret
       if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
-      const res = await fetch(`/api/organizer/tickets?eventId=${encodeURIComponent(eventId)}`, { headers })
+      const res = await fetch(`/api/organizer/tickets?eventId=${encodeURIComponent(eventId)}&status=${encodeURIComponent(viewFilter)}`, { headers })
       const data = await res.json()
       if (res.ok) setTickets(data.tickets || [])
       else toast.error('Failed to load attendees')
@@ -317,6 +321,52 @@ export default function OrganizerDashboard() {
     }
   }
 
+  async function startEdit(ticket: any) {
+    setEditingId(ticket.id)
+    setEditForm({
+      name: ticket.name || '',
+      email: ticket.email || '',
+      phone: ticket.phone || '',
+      college: ticket.college || '',
+      ieee: ticket.ieee || ''
+    })
+  }
+
+  async function saveEdit(id: string) {
+    if (!selected) return
+    setEditLoading(true)
+    try {
+      const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+      if (organizerSecret) headers['x-organizer-secret'] = organizerSecret
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+      
+      const res = await fetch(`/api/organizer/tickets?eventId=${encodeURIComponent(selected.id)}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ id, ...editForm })
+      })
+      
+      const data = await res.json()
+      if (res.ok) {
+        toast.success('Delegate updated')
+        setEditingId(null)
+        setEditForm({})
+        await fetchTickets(selected.id)
+      } else {
+        toast.error(data.error || 'Update failed')
+      }
+    } catch (e) {
+      toast.error('Network error')
+    } finally {
+      setEditLoading(false)
+    }
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditForm({})
+  }
+
   async function sendBulkCertificateEmails() {
     if (!selected) return
     if (!driveFolderLink.trim()) {
@@ -393,7 +443,8 @@ export default function OrganizerDashboard() {
       setTickets([])
       setAnalytics(null)
     }
-  }, [selected?.id])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id, viewFilter])
 
   // Try to preload existing template for selected event
   useEffect(() => {
@@ -723,9 +774,15 @@ export default function OrganizerDashboard() {
                 <h2 className="text-xl font-bold text-white">Attendees</h2>
                 <p className="text-slate-400 text-sm">Event: {selected.title}</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <Input value={ticketQuery} onChange={(e)=>setTicketQuery(e.target.value)} placeholder="Search name/email" />
                 <Button variant="ghost" onClick={() => fetchTickets(selected.id)} isLoading={ticketsLoading}>Refresh</Button>
+                <label className="text-xs text-slate-400">View</label>
+                <select value={viewFilter} onChange={e=>setViewFilter(e.target.value as any)} className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-white text-xs">
+                  <option value="all">All</option>
+                  <option value="checked">Checked-in</option>
+                  <option value="remaining">Remaining</option>
+                </select>
                 <Button
                   variant="cosmic"
                   onClick={() => {
@@ -754,22 +811,78 @@ export default function OrganizerDashboard() {
                     <th className="py-2 pr-4">Status</th>
                     <th className="py-2 pr-4">Used</th>
                     <th className="py-2 pr-4">Created</th>
+                    <th className="py-2 pr-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {ticketsLoading ? (
-                    <tr><td className="py-4 text-slate-400" colSpan={5}>Loading attendees...</td></tr>
+                    <tr><td className="py-4 text-slate-400" colSpan={6}>Loading attendees...</td></tr>
                   ) : filteredTickets.length === 0 ? (
-                    <tr><td className="py-4 text-slate-400" colSpan={5}>No attendees yet.</td></tr>
+                    <tr><td className="py-4 text-slate-400" colSpan={6}>No attendees yet.</td></tr>
                   ) : (
                     filteredTickets.map((t) => (
-                      <tr key={t.id} className="hover:bg-white/5">
-                        <td className="py-2 pr-4 text-white">{t.name}</td>
-                        <td className="py-2 pr-4 text-slate-300">{t.email}</td>
-                        <td className="py-2 pr-4 text-slate-300">{t.status || '—'}</td>
-                        <td className="py-2 pr-4 text-slate-300">{t.used ? 'Yes' : 'No'}</td>
-                        <td className="py-2 pr-4 text-slate-400">{new Date(t.created_at).toLocaleString()}</td>
-                      </tr>
+                      editingId === t.id ? (
+                        <tr key={t.id} className="bg-white/5">
+                          <td colSpan={6} className="py-3 px-4">
+                            <div className="space-y-2">
+                              <div className="grid grid-cols-5 gap-2">
+                                <Input
+                                  placeholder="Name"
+                                  value={editForm.name}
+                                  onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                                  className="h-8 text-xs"
+                                />
+                                <Input
+                                  placeholder="Email"
+                                  type="email"
+                                  value={editForm.email}
+                                  onChange={e => setEditForm({ ...editForm, email: e.target.value })}
+                                  className="h-8 text-xs"
+                                />
+                                <Input
+                                  placeholder="Phone"
+                                  value={editForm.phone}
+                                  onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                                  className="h-8 text-xs"
+                                />
+                                <Input
+                                  placeholder="College"
+                                  value={editForm.college}
+                                  onChange={e => setEditForm({ ...editForm, college: e.target.value })}
+                                  className="h-8 text-xs"
+                                />
+                                <Input
+                                  placeholder="IEEE ID"
+                                  value={editForm.ieee}
+                                  onChange={e => setEditForm({ ...editForm, ieee: e.target.value })}
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                              <div className="flex gap-2">
+                                <Button onClick={() => saveEdit(t.id)} isLoading={editLoading} variant="primary" className="h-7 px-2 text-xs">
+                                  Save
+                                </Button>
+                                <Button onClick={cancelEdit} variant="ghost" className="h-7 px-2 text-xs">
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={t.id} className="hover:bg-white/5">
+                          <td className="py-2 pr-4 text-white">{t.name}</td>
+                          <td className="py-2 pr-4 text-slate-300">{t.email}</td>
+                          <td className="py-2 pr-4 text-slate-300">{t.status || '—'}</td>
+                          <td className="py-2 pr-4 text-slate-300">{t.used ? 'Yes' : 'No'}</td>
+                          <td className="py-2 pr-4 text-slate-400">{new Date(t.created_at).toLocaleString()}</td>
+                          <td className="py-2 pr-4">
+                            <Button onClick={() => startEdit(t)} variant="ghost" className="h-7 px-2" title="Edit Delegate">
+                              <Edit2 className="w-3 h-3 text-amber-400" />
+                            </Button>
+                          </td>
+                        </tr>
+                      )
                     ))
                   )}
                 </tbody>

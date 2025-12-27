@@ -35,9 +35,10 @@ async function requireOrganizerId(req: NextApiRequest) {
  * DO NOT merge with admin authentication
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'GET') return res.status(405).end()
+  if (req.method !== 'GET' && req.method !== 'PUT') return res.status(405).end()
 
   const eventId = String(req.query.eventId || '')
+  const statusFilter = String(req.query.status || '').toLowerCase()
   if (!eventId) return res.status(400).json({ error: 'missing_event_id' })
 
   // CRITICAL: Only organizer auth - reject admin session cookies
@@ -56,18 +57,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   if (organizerSecret) {
     if (ev.organizer_id !== organizerSecret) return res.status(403).json({ error: 'forbidden' })
-  } else {
-    // bearer organizer: ensure ownership mapping exists
-    // If you later store organizer's auth user id in events, replace this check accordingly
   }
 
-  const { data, error } = await supabase
-    .from('tickets')
-    .select('*')
-    .eq('event_id', eventId)
-    .order('created_at', { ascending: false })
+  if (req.method === 'GET') {
+    let query = supabase
+      .from('tickets')
+      .select('*')
+      .eq('event_id', eventId)
+      .order('created_at', { ascending: false })
 
-  if (error) return res.status(500).json({ error: error.message })
+    if (statusFilter === 'checked') {
+      query = query.eq('used', true)
+    } else if (statusFilter === 'remaining') {
+      query = query.eq('used', false)
+    }
 
-  return res.json({ tickets: data || [] })
+    const { data, error } = await query
+    if (error) return res.status(500).json({ error: error.message })
+    return res.json({ tickets: data || [] })
+  }
+
+  if (req.method === 'PUT') {
+    const { id, name, email, phone, college, ieee } = req.body
+    if (!id) return res.status(400).json({ error: 'missing id' })
+
+    // Verify ticket belongs to this event
+    const { data: ticket, error: ticketErr } = await supabase
+      .from('tickets')
+      .select('*')
+      .eq('id', id)
+      .eq('event_id', eventId)
+      .maybeSingle()
+    if (ticketErr || !ticket) return res.status(404).json({ error: 'not_found' })
+
+    const updateData: any = {}
+    if (name !== undefined && name.trim()) updateData.name = name.trim()
+    if (email !== undefined && email.trim()) updateData.email = email.trim()
+    if (phone !== undefined) updateData.phone = phone.trim()
+    if (college !== undefined) updateData.college = college.trim()
+    if (ieee !== undefined) updateData.ieee = ieee.trim()
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: 'no_fields_to_update' })
+    }
+
+    try {
+      const { error } = await supabase.from('tickets').update(updateData).eq('id', id)
+      if (error) return res.status(500).json({ error: error.message })
+      return res.json({ ok: true, message: 'Delegate updated successfully' })
+    } catch (e: any) {
+      return res.status(500).json({ error: 'update_failed', message: e.message })
+    }
+  }
+
+  res.status(405).end()
 }
