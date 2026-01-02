@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { Card } from '../../components/ui/Card'
@@ -49,16 +49,7 @@ export default function TrackConsolePage() {
     }
   }, [events, queryEventId])
 
-  useEffect(() => {
-    if (!authReady) return
-    if (!organizerSecret && !accessToken) {
-      toast.error('No organizer credentials found. Open Organizer portal, then return.')
-      return
-    }
-    void loadEvents()
-  }, [authReady, organizerSecret, accessToken])
-
-  async function loadEvents() {
+  const loadEvents = useCallback(async () => {
     if (!organizerSecret && !accessToken) return
     setLoadingEvents(true)
     try {
@@ -82,7 +73,16 @@ export default function TrackConsolePage() {
     } finally {
       setLoadingEvents(false)
     }
-  }
+  }, [organizerSecret, accessToken, queryEventId])
+
+  useEffect(() => {
+    if (!authReady) return
+    if (!organizerSecret && !accessToken) {
+      toast.error('No organizer credentials found. Open Organizer portal, then return.')
+      return
+    }
+    void loadEvents()
+  }, [authReady, organizerSecret, accessToken, loadEvents])
 
   const selectedEvent = events.find((e) => e.id === selectedEventId)
 

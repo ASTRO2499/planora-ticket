@@ -46,7 +46,7 @@ function getOrganizerSecret(req: NextApiRequest) {
 function parseBoolean(value: any) {
   if (value === undefined || value === null || value === '') return undefined
   if (typeof value === 'boolean') return value
-  if (typeof value === 'number') return value === 1 || value === true ? true : false
+  if (typeof value === 'number') return value === 1 ? true : value === 0 ? false : Boolean(value)
   const v = String(value).toLowerCase().trim()
   if (v === 'true' || v === '1' || v === 'on' || v === 'yes') return true
   if (v === 'false' || v === '0' || v === 'off' || v === 'no' || v === '') return false

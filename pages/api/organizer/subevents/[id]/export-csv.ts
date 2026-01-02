@@ -85,7 +85,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const csvRows = []
     csvRows.push(['Name', 'Email', 'Phone', 'College', 'Notes', 'Payment Method', 'Payment Status', 'Checked In', 'Registered At'])
 
-    registrations?.forEach(reg => {
+    registrations?.forEach((reg: any) => {
       csvRows.push([
         reg.name || '',
         reg.email || '',

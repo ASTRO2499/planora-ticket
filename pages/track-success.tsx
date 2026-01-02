@@ -1,5 +1,6 @@
 import Head from 'next/head'
-import { useEffect, useState } from 'react'
+import Image from 'next/image'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import SuccessAnimation from '../components/SuccessAnimation'
 import { Button } from '../components/ui/Button'
@@ -21,12 +22,7 @@ export default function TrackSuccessPage() {
     return () => clearTimeout(timer)
   }, [])
 
-  useEffect(() => {
-    if (!registrationId) return
-    loadRegistration()
-  }, [registrationId])
-
-  async function loadRegistration() {
+  const loadRegistration = useCallback(async () => {
     try {
       const res = await fetch(`/api/subevents/registration/${registrationId}`)
       if (res.ok) {
@@ -54,7 +50,12 @@ export default function TrackSuccessPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [registrationId])
+
+  useEffect(() => {
+    if (!registrationId) return
+    void loadRegistration()
+  }, [registrationId, loadRegistration])
 
   function downloadQR() {
     if (!qrCode) return
@@ -113,7 +114,7 @@ export default function TrackSuccessPage() {
           {/* Header */}
           <div className="mb-8 sm:mb-10 text-center">
             <p className="text-xs sm:text-sm uppercase tracking-[0.3em] text-cyan-200/80">Registration Success</p>
-            <h1 className="mt-3 text-3xl sm:text-4xl font-bold text-white">You're All Set!</h1>
+            <h1 className="mt-3 text-3xl sm:text-4xl font-bold text-white">You&apos;re All Set!</h1>
             <p className="mt-3 text-sm sm:text-base text-slate-300 max-w-2xl mx-auto">Your registration has been confirmed. Check your email for details and show the QR code at the event.</p>
           </div>
 
@@ -161,7 +162,7 @@ export default function TrackSuccessPage() {
                   <div className="bg-white/5 border border-white/10 rounded-xl p-6 text-center">
                     <p className="text-slate-300 mb-4 text-sm">Use this QR code for check-in:</p>
                     <div className="flex justify-center mb-4">
-                      <img src={qrCode} alt="Check-in QR Code" className="w-48 h-48 sm:w-64 sm:h-64" />
+                      <Image src={qrCode} alt="Check-in QR Code" width={256} height={256} className="w-48 h-48 sm:w-64 sm:h-64" />
                     </div>
                     <div className="flex gap-2 justify-center">
                       <Button onClick={downloadQR} variant="outline" className="flex-1 sm:flex-initial">
@@ -193,7 +194,7 @@ export default function TrackSuccessPage() {
 
           {/* Info Box */}
           <Card className="p-4 sm:p-6 bg-white/5 border-white/10">
-            <h3 className="font-semibold text-white mb-3">What's Next?</h3>
+            <h3 className="font-semibold text-white mb-3">What&apos;s Next?</h3>
             <ul className="space-y-2 text-sm text-slate-300">
               <li>✓ Check your email for confirmation and event details</li>
               <li>✓ Save the QR code to your phone for quick check-in</li>

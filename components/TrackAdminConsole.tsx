@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
@@ -12,17 +12,7 @@ export function TrackAdminConsole({ eventId, organizerSecret, accessToken }: { e
   const [searchQuery, setSearchQuery] = useState('')
   const [exportingCSV, setExportingCSV] = useState(false)
 
-  useEffect(() => {
-    loadSubEvents()
-  }, [eventId])
-
-  useEffect(() => {
-    if (selectedSubEvent) {
-      loadRegistrations(selectedSubEvent.id)
-    }
-  }, [selectedSubEvent])
-
-  async function loadSubEvents() {
+  const loadSubEvents = useCallback(async () => {
     setLoading(true)
     try {
       const headers: Record<string, string> = {}
@@ -42,9 +32,9 @@ export function TrackAdminConsole({ eventId, organizerSecret, accessToken }: { e
     } finally {
       setLoading(false)
     }
-  }
+  }, [eventId, organizerSecret, accessToken])
 
-  async function loadRegistrations(subEventId: string) {
+  const loadRegistrations = useCallback(async (subEventId: string) => {
     setLoading(true)
     try {
       const headers: Record<string, string> = {}
@@ -63,7 +53,17 @@ export function TrackAdminConsole({ eventId, organizerSecret, accessToken }: { e
     } finally {
       setLoading(false)
     }
-  }
+  }, [organizerSecret, accessToken])
+
+  useEffect(() => {
+    void loadSubEvents()
+  }, [eventId, loadSubEvents])
+
+  useEffect(() => {
+    if (selectedSubEvent) {
+      void loadRegistrations(selectedSubEvent.id)
+    }
+  }, [selectedSubEvent, loadRegistrations])
 
   async function exportCSV() {
     if (!selectedSubEvent) return
