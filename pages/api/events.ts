@@ -112,15 +112,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'GET') {
     try {
-      const { data, error } = await supabase
+      const { id } = req.query
+      let query = supabase
         .from('events')
         .select('*')
         .eq('is_published', true)
+
+      // If single event requested by ID, filter to that event
+      if (id) {
+        query = query.eq('id', id as string)
+      }
+
+      const { data, error } = await query
         .order('created_at', { ascending: false })
 
       if (error) {
         console.error('Supabase fetch error:', error)
         return res.status(500).json({ error: error.message })
+      }
+
+      // If requesting by ID, return single event; otherwise return array
+      if (id) {
+        const event = data?.[0] || null
+        return res.json({ event })
       }
       
       return res.json({ events: data || [] })

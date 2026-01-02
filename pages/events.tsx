@@ -81,14 +81,22 @@ export default function EventsPage() {
                 <div className="p-4 sm:p-5 space-y-2 sm:space-y-3">
                   <h2 className="text-white font-bold text-base sm:text-lg line-clamp-1">{event.title}</h2>
                   <p className="text-slate-300 text-xs sm:text-sm line-clamp-2">{event.description}</p>
-                  <div className="flex justify-between items-center pt-1 sm:pt-2">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-3 pt-1 sm:pt-2">
                     <div className="text-slate-400 text-xs sm:text-sm">Fee: ₹{event.price_inr}</div>
-                    <Link 
-                      href={`/event/${event.id}`} 
-                      passHref
-                    >
-                      <Button variant="primary" className="px-4">Register</Button>
-                    </Link>
+                    <div className="flex gap-2 w-full sm:w-auto">
+                      <Link 
+                        href={`/event/${event.id}/track`} 
+                        passHref
+                      >
+                        <Button variant="outline" className="px-3 flex-1 sm:flex-none">Explore Track</Button>
+                      </Link>
+                      <Link 
+                        href={`/event/${event.id}`} 
+                        passHref
+                      >
+                        <Button variant="primary" className="px-4 flex-1 sm:flex-none">Register</Button>
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </Card>

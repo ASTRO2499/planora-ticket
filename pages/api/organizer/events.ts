@@ -43,6 +43,16 @@ function getOrganizerSecret(req: NextApiRequest) {
   return typeof secret === 'string' ? secret.trim() : null
 }
 
+function parseBoolean(value: any) {
+  if (value === undefined || value === null || value === '') return undefined
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1 || value === true ? true : false
+  const v = String(value).toLowerCase().trim()
+  if (v === 'true' || v === '1' || v === 'on' || v === 'yes') return true
+  if (v === 'false' || v === '0' || v === 'off' || v === 'no' || v === '') return false
+  return undefined
+}
+
 /**
  * ORGANIZER PORTAL ENDPOINT
  * Authentication: Bearer token (organizer role) OR x-organizer-secret ONLY
@@ -78,16 +88,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (evErr || !ev || ev.organizer_id !== organizerSecret) return res.status(403).json({ error: 'forbidden' })
       }
       const updates: any = {}
+      const booleanFields = new Set(['is_published','is_featured','track_coming_soon'])
       const mapField = (name: string) => {
-        const v = Array.isArray((fields as any)[name]) ? (fields as any)[name][0] : (fields as any)[name]
-        if (v !== undefined && v !== null && v !== '') updates[name] = v
+        const raw = Array.isArray((fields as any)[name]) ? (fields as any)[name][0] : (fields as any)[name]
+        if (raw === undefined || raw === null || raw === '') return
+        if (booleanFields.has(name)) {
+          const parsed = parseBoolean(raw)
+          if (parsed !== undefined) {
+            // Explicitly cast to boolean to prevent string storage
+            updates[name] = parsed === true ? true : false
+          }
+        } else {
+          updates[name] = raw
+        }
       }
-      ;['title','description','date','location','price_inr','is_published','is_featured'].forEach(mapField)
+      ;['title','description','date','location','price_inr','is_published','is_featured','track_coming_soon'].forEach(mapField)
+      console.log('Event update - final updates object:', updates, 'track_coming_soon:', { value: updates.track_coming_soon, type: typeof updates.track_coming_soon })
       if (files.coverImage?.[0]) {
         updates.image_url = await uploadCover(files.coverImage[0])
       }
       const { data, error } = await supabase.from('events').update(updates).eq('id', id).select().single()
-      if (error) return res.status(500).json({ error: error.message })
+      if (error) {
+        console.error('Event update error:', error)
+        return res.status(500).json({ error: error.message })
+      }
+      console.log('Event updated successfully:', { id, updates, returned: data, track_coming_soon: { value: data?.track_coming_soon, type: typeof data?.track_coming_soon } })
       return res.json({ event: data })
     } catch (err: any) {
       return res.status(500).json({ error: 'update_failed', detail: err?.message })

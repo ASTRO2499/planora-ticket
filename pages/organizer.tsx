@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Head from 'next/head'
+import { useRouter } from 'next/router'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -9,6 +10,7 @@ import { Award, Edit2 } from 'lucide-react'
 import SuccessAnimation from '../components/SuccessAnimation'
 
 export default function OrganizerDashboard() {
+  const router = useRouter()
   const [authed, setAuthed] = useState(false)
   const [organizerSecret, setOrganizerSecret] = useState('')
   
@@ -34,6 +36,34 @@ export default function OrganizerDashboard() {
   const [editForm, setEditForm] = useState<any>({})
   const [editLoading, setEditLoading] = useState(false)
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false)
+  const [subEvents, setSubEvents] = useState<any[]>([])
+  const [showSubEventsModal, setShowSubEventsModal] = useState(false)
+  const [subEventsLoading, setSubEventsLoading] = useState(false)
+  const [newSubEvent, setNewSubEvent] = useState({ title: '', type: 'workshop', description: '', start_time: '', end_time: '', location: '', max_capacity: '', speaker_name: '', speaker_email: '', price_inr: '', requires_payment: false })
+  const [editingSubEventId, setEditingSubEventId] = useState<string | null>(null)
+  const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null)
+  const [trackRegistrations, setTrackRegistrations] = useState<any[]>([])
+  const [trackAdminLoading, setTrackAdminLoading] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const storedSecret = localStorage.getItem('organizerSecret') || ''
+    const storedToken = localStorage.getItem('organizerAccessToken') || ''
+    if (storedSecret) setOrganizerSecret(storedSecret)
+    if (storedToken) setAccessToken(storedToken)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (organizerSecret) localStorage.setItem('organizerSecret', organizerSecret)
+    else localStorage.removeItem('organizerSecret')
+  }, [organizerSecret])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (accessToken) localStorage.setItem('organizerAccessToken', accessToken)
+    else localStorage.removeItem('organizerAccessToken')
+  }, [accessToken])
 
   function applySampleTemplate(kind: 'cosmic' | 'ocean') {
     const samples: Record<string, any> = {
@@ -73,6 +103,175 @@ export default function OrganizerDashboard() {
       (t.id && String(t.id).toLowerCase().includes(q))
     )
   })
+
+  async function fetchSubEvents(eventId: string) {
+    if (!eventId) return
+    setSubEventsLoading(true)
+    try {
+      const headers: Record<string,string> = {}
+      if (organizerSecret) headers['x-organizer-secret'] = organizerSecret
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+      const res = await fetch(`/api/organizer/subevents?eventId=${encodeURIComponent(eventId)}`, { headers })
+      const data = await res.json()
+      if (res.ok) setSubEvents(data.subEvents || [])
+      else toast.error('Failed to load sub-events')
+    } catch {
+      toast.error('Network error loading sub-events')
+    } finally {
+      setSubEventsLoading(false)
+    }
+  }
+
+  async function createOrUpdateSubEvent() {
+    if (!selected) return
+    if (!newSubEvent.title || !newSubEvent.type) {
+      toast.error('Title and type are required')
+      return
+    }
+    
+    setSubEventsLoading(true)
+    try {
+      const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+      if (organizerSecret) headers['x-organizer-secret'] = organizerSecret
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+      
+      const payload = {
+        ...newSubEvent,
+        max_capacity: newSubEvent.max_capacity ? parseInt(newSubEvent.max_capacity) : null
+      }
+      
+      if (editingSubEventId) {
+        // Update existing
+        const res = await fetch(`/api/organizer/subevents?eventId=${encodeURIComponent(selected.id)}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ id: editingSubEventId, ...payload })
+        })
+        const data = await res.json()
+        if (res.ok) {
+          toast.success('Sub-event updated')
+          setNewSubEvent({ title: '', type: 'workshop', description: '', start_time: '', end_time: '', location: '', max_capacity: '', speaker_name: '', speaker_email: '', price_inr: '', requires_payment: false })
+          setEditingSubEventId(null)
+          fetchSubEvents(selected.id)
+        } else {
+          toast.error(data.error || 'Update failed')
+        }
+      } else {
+        // Create new
+        const res = await fetch(`/api/organizer/subevents?eventId=${encodeURIComponent(selected.id)}`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload)
+        })
+        const data = await res.json()
+        if (res.ok) {
+          toast.success('Sub-event created')
+          setNewSubEvent({ title: '', type: 'workshop', description: '', start_time: '', end_time: '', location: '', max_capacity: '', speaker_name: '', speaker_email: '', price_inr: '', requires_payment: false })
+          fetchSubEvents(selected.id)
+        } else {
+          toast.error(data.error || 'Creation failed')
+        }
+      }
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setSubEventsLoading(false)
+    }
+  }
+
+  async function deleteSubEvent(id: string) {
+    if (!selected || !confirm('Delete this sub-event?')) return
+    setSubEventsLoading(true)
+    try {
+      const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+      if (organizerSecret) headers['x-organizer-secret'] = organizerSecret
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+      
+      const res = await fetch(`/api/organizer/subevents?eventId=${encodeURIComponent(selected.id)}`, {
+        method: 'DELETE',
+        headers,
+        body: JSON.stringify({ id })
+      })
+      
+      if (res.ok) {
+        toast.success('Sub-event deleted')
+        fetchSubEvents(selected.id)
+      } else {
+        const data = await res.json()
+        toast.error(data.error || 'Deletion failed')
+      }
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setSubEventsLoading(false)
+    }
+  }
+
+  function editSubEvent(subEvent: any) {
+    setNewSubEvent({
+      title: subEvent.title || '',
+      type: subEvent.type || 'workshop',
+      description: subEvent.description || '',
+      start_time: subEvent.start_time ? subEvent.start_time.slice(0,16) : '',
+      end_time: subEvent.end_time ? subEvent.end_time.slice(0,16) : '',
+      location: subEvent.location || '',
+      max_capacity: subEvent.max_capacity || '',
+      speaker_name: subEvent.speaker_name || '',
+      speaker_email: subEvent.speaker_email || '',
+      price_inr: subEvent.price_inr ? String(subEvent.price_inr) : '',
+      requires_payment: subEvent.requires_payment || false
+    })
+    setEditingSubEventId(subEvent.id)
+  }
+
+  function cancelEditSubEvent() {
+    setNewSubEvent({ title: '', type: 'workshop', description: '', start_time: '', end_time: '', location: '', max_capacity: '', speaker_name: '', speaker_email: '', price_inr: '', requires_payment: false })
+    setEditingSubEventId(null)
+  }
+
+  async function fetchTrackRegistrations(subEventId: string) {
+    setTrackAdminLoading(true)
+    try {
+      const headers: Record<string,string> = {}
+      if (organizerSecret) headers['x-organizer-secret'] = organizerSecret
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+      const res = await fetch(`/api/organizer/subevents/${encodeURIComponent(subEventId)}/registrations`, { headers })
+      const data = await res.json()
+      if (res.ok) {
+        setTrackRegistrations(data.registrations || [])
+        setSelectedTrackId(subEventId)
+      } else {
+        toast.error('Failed to load registrations')
+      }
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setTrackAdminLoading(false)
+    }
+  }
+
+  async function downloadTrackRegistrationsCSV(subEventId: string) {
+    try {
+      const headers: Record<string,string> = {}
+      if (organizerSecret) headers['x-organizer-secret'] = organizerSecret
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+      const res = await fetch(`/api/organizer/subevents/${encodeURIComponent(subEventId)}/registrations?csv=true`, { headers })
+      if (res.ok) {
+        const blob = await res.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `track-registrations-${subEventId}.csv`
+        a.click()
+        window.URL.revokeObjectURL(url)
+        toast.success('CSV downloaded')
+      } else {
+        toast.error('Failed to download CSV')
+      }
+    } catch {
+      toast.error('Network error')
+    }
+  }
 
   async function login(e: React.FormEvent) {
     e.preventDefault()
@@ -443,9 +642,11 @@ export default function OrganizerDashboard() {
     if (selected?.id) {
       fetchTickets(selected.id)
       fetchAnalytics(selected.id)
+      fetchSubEvents(selected.id)
     } else {
       setTickets([])
       setAnalytics(null)
+      setSubEvents([])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id, viewFilter])
@@ -521,14 +722,24 @@ export default function OrganizerDashboard() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">Manage Events</h1>
           {selected && (
-            <Button
-              variant={showFormBuilder ? 'primary' : 'outline'}
-              size="sm"
-              onClick={() => setShowFormBuilder(!showFormBuilder)}
-              title="Registration Form Builder"
-            >
-              {showFormBuilder ? 'Close Form Builder' : 'Edit Form'}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/track/console?eventId=${encodeURIComponent(selected.id)}`)}
+                title="Open Track Registration Console page"
+              >
+                Track Console Page
+              </Button>
+              <Button
+                variant={showFormBuilder ? 'primary' : 'outline'}
+                size="sm"
+                onClick={() => setShowFormBuilder(!showFormBuilder)}
+                title="Registration Form Builder"
+              >
+                {showFormBuilder ? 'Close Form Builder' : 'Edit Form'}
+              </Button>
+            </div>
           )}
         </div>
         <div className="grid md:grid-cols-2 gap-6">
@@ -572,8 +783,9 @@ export default function OrganizerDashboard() {
                   <input type="file" accept="image/*" onChange={(e)=>setCoverFile(e.target.files?.[0] || null)} />
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-4 grid grid-cols-2 gap-2">
                   <Button onClick={saveEvent} isLoading={loading}>Save Changes</Button>
+                  <Button onClick={() => setShowSubEventsModal(true)} variant="outline">Create Sub Events</Button>
                 </div>
 
                 <div className="mt-6">
@@ -979,6 +1191,260 @@ export default function OrganizerDashboard() {
             </Card>
           </div>
         )}
+
+        {/* Sub-Events Modal */}
+        {showSubEventsModal && selected && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+            <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-slate-900/95 border-white/20">
+              <div className="sticky top-0 bg-slate-900 border-b border-white/10 p-6 flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-white">Manage Sub-Events</h2>
+                <Button variant="ghost" onClick={() => { setShowSubEventsModal(false); cancelEditSubEvent() }}>✕</Button>
+              </div>
+              <div className="p-6 space-y-6">
+                {/* Create/Edit Sub-Event Form */}
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+                  <h3 className="text-lg font-semibold text-white">{editingSubEventId ? 'Edit Sub-Event' : 'Create New Sub-Event'}</h3>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      placeholder="Title (e.g., Workshop on AI)"
+                      value={newSubEvent.title}
+                      onChange={(e) => setNewSubEvent({ ...newSubEvent, title: e.target.value })}
+                    />
+                    <select
+                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white"
+                      value={newSubEvent.type}
+                      onChange={(e) => setNewSubEvent({ ...newSubEvent, type: e.target.value })}
+                    >
+                      <option value="workshop">Workshop</option>
+                      <option value="talk">Talk Session</option>
+                      <option value="panel">Panel Discussion</option>
+                      <option value="breakout">Breakout Session</option>
+                      <option value="networking">Networking</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+
+                  <textarea
+                    placeholder="Description"
+                    value={newSubEvent.description}
+                    onChange={(e) => setNewSubEvent({ ...newSubEvent, description: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm"
+                    rows={2}
+                  />
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      type="datetime-local"
+                      placeholder="Start Time"
+                      value={newSubEvent.start_time}
+                      onChange={(e) => setNewSubEvent({ ...newSubEvent, start_time: e.target.value })}
+                    />
+                    <Input
+                      type="datetime-local"
+                      placeholder="End Time"
+                      value={newSubEvent.end_time}
+                      onChange={(e) => setNewSubEvent({ ...newSubEvent, end_time: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      placeholder="Location"
+                      value={newSubEvent.location}
+                      onChange={(e) => setNewSubEvent({ ...newSubEvent, location: e.target.value })}
+                    />
+                    <Input
+                      type="number"
+                      placeholder="Max Capacity (optional)"
+                      value={newSubEvent.max_capacity}
+                      onChange={(e) => setNewSubEvent({ ...newSubEvent, max_capacity: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      placeholder="Speaker Name (optional)"
+                      value={newSubEvent.speaker_name}
+                      onChange={(e) => setNewSubEvent({ ...newSubEvent, speaker_name: e.target.value })}
+                    />
+                    <Input
+                      type="email"
+                      placeholder="Speaker Email (optional)"
+                      value={newSubEvent.speaker_email}
+                      onChange={(e) => setNewSubEvent({ ...newSubEvent, speaker_email: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newSubEvent.requires_payment}
+                        onChange={(e) => setNewSubEvent({ ...newSubEvent, requires_payment: e.target.checked })}
+                        className="cursor-pointer"
+                      />
+                      <span className="text-sm text-white">Enable Payment</span>
+                    </label>
+                    {newSubEvent.requires_payment && (
+                      <Input
+                        type="number"
+                        placeholder="Price (₹)"
+                        value={newSubEvent.price_inr}
+                        onChange={(e) => setNewSubEvent({ ...newSubEvent, price_inr: e.target.value })}
+                      />
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 justify-end">
+                    {editingSubEventId && (
+                      <Button variant="ghost" onClick={cancelEditSubEvent}>Cancel</Button>
+                    )}
+                    <Button onClick={createOrUpdateSubEvent} isLoading={subEventsLoading}>
+                      {editingSubEventId ? 'Update Sub-Event' : 'Create Sub-Event'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* List of Sub-Events */}
+                <div>
+                  <h3 className="text-lg font-semibold text-white mb-3">Sub-Events List</h3>
+                  {subEventsLoading && !subEvents.length ? (
+                    <div className="text-slate-400 text-center py-4">Loading sub-events...</div>
+                  ) : subEvents.length === 0 ? (
+                    <div className="text-slate-400 text-center py-4">No sub-events created yet.</div>
+                  ) : (
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      {subEvents.map((subEvent) => (
+                        <div key={subEvent.id} className="bg-white/5 border border-white/10 rounded-lg p-3 flex items-start justify-between hover:bg-white/10 transition">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <div className="font-semibold text-white">{subEvent.title}</div>
+                              <span className="text-xs bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded">{subEvent.type}</span>
+                            </div>
+                            {subEvent.description && (
+                              <div className="text-xs text-slate-400 mt-1">{subEvent.description}</div>
+                            )}
+                            <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
+                              {subEvent.start_time && (
+                                <span>📅 {new Date(subEvent.start_time).toLocaleString()}</span>
+                              )}
+                              {subEvent.location && (
+                                <span>📍 {subEvent.location}</span>
+                              )}
+                              {subEvent.speaker_name && (
+                                <span>👤 {subEvent.speaker_name}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex gap-2 ml-4">
+                            <Button
+                              variant="ghost"
+                              onClick={() => fetchTrackRegistrations(subEvent.id)}
+                              className="h-8 px-2 text-xs"
+                            >
+                              Admin
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              onClick={() => editSubEvent(subEvent)}
+                              className="h-8 px-2 text-xs"
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              onClick={() => deleteSubEvent(subEvent.id)}
+                              className="h-8 px-2 text-xs text-red-400 hover:text-red-300"
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end pt-4 border-t border-white/10">
+                  <Button variant="outline" onClick={() => { setShowSubEventsModal(false); cancelEditSubEvent() }}>
+                    Close
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Track Admin Modal */}
+        {selectedTrackId && trackRegistrations && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+            <Card className="w-full max-w-5xl max-h-[90vh] overflow-y-auto bg-slate-900/95 border-white/20">
+              <div className="sticky top-0 bg-slate-900 border-b border-white/10 p-6 flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-white">Track Registrations</h2>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => downloadTrackRegistrationsCSV(selectedTrackId)}
+                    className="text-xs"
+                  >
+                    Download CSV
+                  </Button>
+                  <Button variant="ghost" onClick={() => { setSelectedTrackId(null); setTrackRegistrations([]) }}>✕</Button>
+                </div>
+              </div>
+              <div className="p-6">
+                {trackAdminLoading ? (
+                  <div className="text-slate-400 text-center py-8">Loading registrations...</div>
+                ) : trackRegistrations.length === 0 ? (
+                  <div className="text-slate-400 text-center py-8">No registrations yet for this session.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-white/10">
+                          <th className="text-left px-4 py-2 font-semibold text-white">Name</th>
+                          <th className="text-left px-4 py-2 font-semibold text-white">Email</th>
+                          <th className="text-left px-4 py-2 font-semibold text-white">Phone</th>
+                          <th className="text-left px-4 py-2 font-semibold text-white">College</th>
+                          <th className="text-left px-4 py-2 font-semibold text-white">Payment Status</th>
+                          <th className="text-left px-4 py-2 font-semibold text-white">Registered</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {trackRegistrations.map((reg) => (
+                          <tr key={reg.id} className="border-b border-white/10 hover:bg-white/5">
+                            <td className="px-4 py-2 text-white">{reg.name}</td>
+                            <td className="px-4 py-2 text-slate-300 text-xs">{reg.email}</td>
+                            <td className="px-4 py-2 text-slate-300">{reg.phone || '-'}</td>
+                            <td className="px-4 py-2 text-slate-300 text-xs">{reg.college || '-'}</td>
+                            <td className="px-4 py-2">
+                              <span className={`text-xs px-2 py-1 rounded-full ${
+                                reg.payment_status === 'paid' ? 'bg-green-500/20 text-green-300' :
+                                reg.payment_status === 'pending' ? 'bg-amber-500/20 text-amber-300' :
+                                'bg-slate-500/20 text-slate-300'
+                              }`}>
+                                {reg.payment_status || 'N/A'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 text-slate-400 text-xs">
+                              {reg.registered_at ? new Date(reg.registered_at).toLocaleDateString() : '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-white/10">
+                  <Button variant="outline" onClick={() => { setSelectedTrackId(null); setTrackRegistrations([]) }}>
+                    Close
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1128,3 +1594,4 @@ function SimpleFormBuilder({ eventId, organizerSecret, accessToken }: { eventId:
     </div>
   )
 }
+
