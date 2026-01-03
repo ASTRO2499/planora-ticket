@@ -164,6 +164,7 @@ export default function Verify() {
     let isProcessing = false
     let lastDetectedQr = ''
     let lastDetectionTime = 0
+    let scanPaused = false  // Flag to pause scanning after successful detection
 
     const startScanner = async () => {
       try {
@@ -190,10 +191,15 @@ export default function Verify() {
             cameraId, 
             scanConfig,
             async (decodedText: string) => {
+              // If scanning is paused, don't process anything
+              if (scanPaused) {
+                return
+              }
+
               const now = Date.now()
               
-              // Prevent rapid re-detection of same QR code
-              if (decodedText === lastDetectedQr && (now - lastDetectionTime) < 500) {
+              // Prevent rapid re-detection of same QR code (within 300ms)
+              if (decodedText === lastDetectedQr && (now - lastDetectionTime) < 300) {
                 return
               }
               
@@ -208,10 +214,14 @@ export default function Verify() {
               // Skip if this QR code was already scanned in this session
               if (sessionScannedIds.has(decodedText)) {
                 toast('✓ Already scanned', { duration: 2000 })
+                // Pause scanning for 2 seconds
+                scanPaused = true
+                setTimeout(() => { scanPaused = false }, 2000)
                 return
               }
 
               isProcessing = true
+              scanPaused = true  // Pause scanning while processing
 
               const toastId = toast.loading('Verifying ticket...')
               try {
@@ -261,8 +271,9 @@ export default function Verify() {
                     body: JSON.stringify({ ticketId: result.id })
                   })
                   
-                  // Set cooldown after successful scan - camera stays on
-                  setScanCooldown(1)
+                  // Pause scanning for 2 seconds after successful scan
+                  setScanCooldown(2)
+                  setTimeout(() => { scanPaused = false }, 2000)
                 } else {
                   const scanData = {
                     valid: false,
@@ -290,14 +301,16 @@ export default function Verify() {
                     }
                   })
                   
-                  // Set longer cooldown for invalid tickets - camera stays on
-                  setScanCooldown(2)
+                  // Pause scanning for 1.5 seconds on invalid scan
+                  setScanCooldown(1.5)
+                  setTimeout(() => { scanPaused = false }, 1500)
                 }
               } catch (e) {
                 console.error('Scan error:', e)
                 toast.error('Verification failed', { duration: 3000 })
-                // Set cooldown even on error - camera stays on
+                // Pause scanning for 1 second on error
                 setScanCooldown(1)
+                setTimeout(() => { scanPaused = false }, 1000)
               } finally {
                 isProcessing = false
               }
