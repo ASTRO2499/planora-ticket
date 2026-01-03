@@ -174,13 +174,16 @@ export default function Verify() {
           setCameras(availableCameras)
           const cameraId = availableCameras[currentCameraIndex]?.id || availableCameras[0].id
           
-          // Optimized scanner config for continuous scanning
+          // Optimized scanner config for continuous scanning with mobile support
           const scanConfig = {
-            fps: 15,                    // Increased from 10 for better responsiveness
+            fps: 10,                    // Lower FPS for better mobile battery/stability
             qrbox: { width: 280, height: 280 },  // Larger detection area
             aspectRatio: 1.0,
-            timeout: 10000,             // 10 second timeout for frame processing
-            disableFlip: false          // Allow camera orientation detection
+            timeout: 5000,              // Reduced timeout for faster processing
+            disableFlip: false,         // Allow camera orientation detection
+            rememberLastCamera: true,   // Remember camera selection on mobile
+            showTorchButton: true,      // Show torch button for dark environments
+            showZoomButton: true        // Show zoom button for better framing
           }
           
           await html5QrCode.start(
@@ -245,7 +248,7 @@ export default function Verify() {
                   
                   toast.success(`✓ Valid - ${result.name}`, { 
                     id: toastId, 
-                    duration: 4000,
+                    duration: 3000,
                     style: {
                       background: '#10b981',
                       color: '#fff'
@@ -258,8 +261,8 @@ export default function Verify() {
                     body: JSON.stringify({ ticketId: result.id })
                   })
                   
-                  // Set cooldown after successful scan
-                  setScanCooldown(2)
+                  // Set cooldown after successful scan - camera stays on
+                  setScanCooldown(1)
                 } else {
                   const scanData = {
                     valid: false,
@@ -280,20 +283,21 @@ export default function Verify() {
                   
                   toast.error(`✗ ${result.reason || 'Invalid'}`, { 
                     id: toastId, 
-                    duration: 4000,
+                    duration: 3000,
                     style: {
                       background: '#ef4444',
                       color: '#fff'
                     }
                   })
                   
-                  // Set longer cooldown for invalid tickets (3 seconds)
-                  setScanCooldown(3)
+                  // Set longer cooldown for invalid tickets - camera stays on
+                  setScanCooldown(2)
                 }
               } catch (e) {
-                toast.error('Verification failed', { id: toastId })
-                // Set cooldown even on error
-                setScanCooldown(2)
+                console.error('Scan error:', e)
+                toast.error('Verification failed', { duration: 3000 })
+                // Set cooldown even on error - camera stays on
+                setScanCooldown(1)
               } finally {
                 isProcessing = false
               }
@@ -313,12 +317,14 @@ export default function Verify() {
     startScanner()
 
     return () => {
-      if (html5QrCode) {
+      if (html5QrCode && !scanning) {
         try {
           html5QrCode.stop().then(() => {
             html5QrCode.clear()
           }).catch(() => {})
-        } catch (e) {}
+        } catch (e) {
+          // Error during cleanup is not critical
+        }
       }
     }
   }, [isAuthenticated, soundEnabled, scanning, playSound, scanCooldown, currentCameraIndex, sessionScannedIds])

@@ -147,7 +147,7 @@ export default function TrackRegisterPage() {
         setIsDraft(true)
       } else {
         toast.success('Registered successfully!')
-        router.push(`/track-success?registrationId=${result.registrationId}`)
+        router.push(`/track-generating?registrationId=${result.registrationId}`)
       }
     } catch (error: any) {
       console.error('Registration error:', error)
