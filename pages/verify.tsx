@@ -150,6 +150,67 @@ export default function Verify() {
     }
   }, [scanCooldown])
 
+  // Device-responsive configuration for optimal scanning
+  const getOptimalScanConfig = useCallback(() => {
+    // Detect device type and capabilities
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    const isTablet = /iPad|Android/i.test(navigator.userAgent) && !/Mobi/i.test(navigator.userAgent)
+    const isLowEndDevice = (navigator as any).deviceMemory ? (navigator as any).deviceMemory <= 2 : false
+    const connection = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection
+    const effectiveType = connection?.effectiveType || '4g'
+    const isSlowConnection = effectiveType === '2g' || effectiveType === '3g'
+
+    let fps = 15
+    let qrboxWidth = 300
+    let qrboxHeight = 300
+    let timeout = 5000
+    let frameSkip = 1
+
+    if (isMobile) {
+      if (isTablet) {
+        // Tablet: balance between mobile and desktop
+        fps = 14
+        qrboxWidth = 320
+        qrboxHeight = 320
+        timeout = 5000
+        frameSkip = 1
+      } else if (isLowEndDevice || isSlowConnection) {
+        // Low-end phone: prioritize battery and performance
+        fps = 8
+        qrboxWidth = 240
+        qrboxHeight = 240
+        timeout = 6000
+        frameSkip = 2
+      } else {
+        // Regular smartphone: balance responsiveness and performance
+        fps = 12
+        qrboxWidth = 280
+        qrboxHeight = 280
+        timeout = 5000
+        frameSkip = 1
+      }
+    } else {
+      // Desktop: higher quality scanning
+      fps = 20
+      qrboxWidth = 350
+      qrboxHeight = 350
+      timeout = 4000
+      frameSkip = 1
+    }
+
+    return {
+      fps,
+      qrbox: { width: qrboxWidth, height: qrboxHeight },
+      aspectRatio: 1.0,
+      timeout,
+      disableFlip: false,
+      rememberLastCamera: true,
+      showTorchButton: true,
+      showZoomButton: true,
+      frameSkip // Custom property for frame skipping
+    }
+  }, [])
+
   useEffect(() => {
     if (!isAuthenticated) return
     if (!scanning) return
@@ -164,7 +225,8 @@ export default function Verify() {
     let isProcessing = false
     let lastDetectedQr = ''
     let lastDetectionTime = 0
-    let scanPaused = false  // Flag to pause scanning after successful detection
+    let frameCounter = 0
+    let frameSkip = 1
 
     const startScanner = async () => {
       try {
@@ -175,53 +237,40 @@ export default function Verify() {
           setCameras(availableCameras)
           const cameraId = availableCameras[currentCameraIndex]?.id || availableCameras[0].id
           
-          // Optimized scanner config for continuous scanning with mobile support
-          const scanConfig = {
-            fps: 10,                    // Lower FPS for better mobile battery/stability
-            qrbox: { width: 280, height: 280 },  // Larger detection area
-            aspectRatio: 1.0,
-            timeout: 5000,              // Reduced timeout for faster processing
-            disableFlip: false,         // Allow camera orientation detection
-            rememberLastCamera: true,   // Remember camera selection on mobile
-            showTorchButton: true,      // Show torch button for dark environments
-            showZoomButton: true        // Show zoom button for better framing
-          }
+          const scanConfig = getOptimalScanConfig()
+          frameSkip = (scanConfig as any).frameSkip || 1
           
           await html5QrCode.start(
             cameraId, 
             scanConfig,
             async (decodedText: string) => {
-              // If scanning is paused, don't process anything
-              if (scanPaused) {
+              // Implement frame skipping for low-end devices
+              frameCounter++
+              if (frameCounter % frameSkip !== 0) {
                 return
               }
 
               const now = Date.now()
               
-              // Prevent rapid re-detection of same QR code (within 300ms)
-              if (decodedText === lastDetectedQr && (now - lastDetectionTime) < 300) {
+              // Hardware debounce: prevent rapid re-detection (400ms window)
+              if (decodedText === lastDetectedQr && (now - lastDetectionTime) < 400) {
                 return
               }
               
               lastDetectedQr = decodedText
               lastDetectionTime = now
               
-              // Skip if already processing to prevent race conditions
+              // Skip if already processing or in cooldown
               if (isProcessing || scanCooldown > 0) {
                 return
               }
 
-              // Skip if this QR code was already scanned in this session
+              // Skip if already scanned in this session
               if (sessionScannedIds.has(decodedText)) {
-                toast('✓ Already scanned', { duration: 2000 })
-                // Pause scanning for 2 seconds
-                scanPaused = true
-                setTimeout(() => { scanPaused = false }, 2000)
                 return
               }
 
               isProcessing = true
-              scanPaused = true  // Pause scanning while processing
 
               const toastId = toast.loading('Verifying ticket...')
               try {
@@ -233,7 +282,6 @@ export default function Verify() {
                 const result = await res.json()
                 
                 if (result.valid) {
-                  // Add to session scanned IDs to prevent re-scanning
                   setSessionScannedIds(prev => new Set([...prev, decodedText]))
                   
                   const scanData = {
@@ -271,9 +319,7 @@ export default function Verify() {
                     body: JSON.stringify({ ticketId: result.id })
                   })
                   
-                  // Pause scanning for 2 seconds after successful scan
                   setScanCooldown(2)
-                  setTimeout(() => { scanPaused = false }, 2000)
                 } else {
                   const scanData = {
                     valid: false,
@@ -301,23 +347,18 @@ export default function Verify() {
                     }
                   })
                   
-                  // Pause scanning for 1.5 seconds on invalid scan
                   setScanCooldown(1.5)
-                  setTimeout(() => { scanPaused = false }, 1500)
                 }
               } catch (e) {
                 console.error('Scan error:', e)
-                toast.error('Verification failed', { duration: 3000 })
-                // Pause scanning for 1 second on error
+                toast.error('Verification failed', { duration: 2000 })
                 setScanCooldown(1)
-                setTimeout(() => { scanPaused = false }, 1000)
               } finally {
                 isProcessing = false
               }
             },
             (errorMessage: string) => {
-              // Silently handle frame decode errors to avoid console spam
-              // This is normal during continuous scanning
+              // Silently ignore frame decode errors
             }
           )
         }
@@ -330,17 +371,15 @@ export default function Verify() {
     startScanner()
 
     return () => {
-      if (html5QrCode && !scanning) {
+      if (html5QrCode) {
         try {
           html5QrCode.stop().then(() => {
             html5QrCode.clear()
           }).catch(() => {})
-        } catch (e) {
-          // Error during cleanup is not critical
-        }
+        } catch (e) {}
       }
     }
-  }, [isAuthenticated, soundEnabled, scanning, playSound, scanCooldown, currentCameraIndex, sessionScannedIds])
+  }, [isAuthenticated, soundEnabled, scanning, playSound, scanCooldown, currentCameraIndex, sessionScannedIds, getOptimalScanConfig])
 
   const handleStartScanning = async () => {
     try {
