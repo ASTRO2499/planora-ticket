@@ -24,8 +24,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .single()
 
     if (regError || !registration) {
+      console.error('Registration not found:', { registrationId, error: regError })
       return res.status(404).json({ error: 'Registration not found' })
     }
+
+    console.log('Starting email process:', { registrationId, email: registration.email, subEvent: registration.sub_events?.title })
 
     // Generate QR code
     const qrRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/subevents/generate-qr`, {
@@ -49,6 +52,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const base64Data = qrCodeDataUrl.replace(/^data:image\/\w+;base64,/, '')
         qrCodeBuffer = Buffer.from(base64Data, 'base64')
       }
+      console.log('QR code generated successfully:', { registrationId, hasBuffer: !!qrCodeBuffer })
+    } else {
+      console.error('QR code generation failed:', { status: qrRes.status, registrationId })
     }
 
     // Generate PDF
@@ -57,10 +63,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (pdfRes.ok) {
       const pdfData = await pdfRes.arrayBuffer()
       pdfBuffer = Buffer.from(pdfData)
+      console.log('PDF generated successfully:', { registrationId, size: pdfBuffer.length })
+    } else {
+      console.error('PDF generation failed:', { status: pdfRes.status, registrationId })
     }
 
     // Send confirmation email
     const transporter = getTransport()
+    
+    // Validate email and transport
+    if (!registration.email) {
+      console.error('Registration has no email:', { registrationId })
+      return res.status(400).json({ error: 'Registration missing email address' })
+    }
+
+    if (!transporter) {
+      console.error('Email transporter not initialized')
+      return res.status(500).json({ error: 'Email service not configured' })
+    }
+
+    console.log('Email transporter ready, preparing email:', { registrationId, to: registration.email })
     const emailContent = `
       <!DOCTYPE html>
       <html>
@@ -240,7 +262,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
-    await transporter.sendMail(mailOptions)
+    console.log('Sending email with attachments:', { registrationId, attachmentCount: mailOptions.attachments.length })
+    
+    try {
+      const info = await transporter.sendMail(mailOptions)
+      console.log('Email sent successfully:', { registrationId, messageId: info.messageId })
+    } catch (mailErr) {
+      console.error('Failed to send email:', { registrationId, error: mailErr instanceof Error ? mailErr.message : String(mailErr) })
+      throw mailErr
+    }
 
     return res.status(200).json({
       success: true,

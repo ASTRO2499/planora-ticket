@@ -79,11 +79,13 @@ export default function TrackConsolePage() {
   useEffect(() => {
     if (!authReady) return
     if (!organizerSecret && !accessToken) {
-      toast.error('No organizer credentials found. Open Organizer portal, then return.')
-      return
+      toast.error('No organizer credentials found. Access denied.')
+      // Redirect to home after 2 seconds
+      const timer = setTimeout(() => router.push('/'), 2000)
+      return () => clearTimeout(timer)
     }
     void loadEvents()
-  }, [authReady, organizerSecret, accessToken, loadEvents])
+  }, [authReady, organizerSecret, accessToken, loadEvents, router])
 
   const selectedEvent = events.find((e) => e.id === selectedEventId)
 

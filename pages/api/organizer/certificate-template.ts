@@ -1,5 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { createClient } from '@supabase/supabase-js'
+import {
+  getOrganizerSecret,
+  checkOrganizerRateLimit,
+  getClientIp,
+  logAuthAttempt,
+  requireOrganizerToken,
+} from '../../../lib/organizerAuth'
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -7,23 +14,32 @@ const supabase = createClient(
 )
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const ip = getClientIp(req)
   const eventId = String(req.query.eventId || '')
   if (!eventId) return res.status(400).json({ error: 'missing eventId' })
 
   // Auth check
-  const token = req.headers.authorization?.replace('Bearer ', '')
-  const secret = req.headers['x-organizer-secret']
+  const organizer = await requireOrganizerToken(req)
+  const secret = getOrganizerSecret(req)
   
-  if (token) {
-    const { data: { user }, error } = await supabase.auth.getUser(token)
-    if (error || !user) return res.status(401).json({ error: 'unauthorized' })
-  } else if (secret) {
-    const { data: event } = await supabase.from('events').select('organizer_secret').eq('id', eventId).single()
-    if (!event || event.organizer_secret !== secret) {
-      return res.status(401).json({ error: 'unauthorized' })
-    }
-  } else {
+  if (!organizer && !secret) {
+    logAuthAttempt('failure', { ip, endpoint: '/api/organizer/certificate-template', reason: 'no_credentials' })
     return res.status(401).json({ error: 'unauthorized' })
+  }
+
+  // SECURITY: Rate limit secret attempts
+  if (secret && !checkOrganizerRateLimit(secret, ip)) {
+    logAuthAttempt('rate_limit', { ip, endpoint: '/api/organizer/certificate-template' })
+    return res.status(429).json({ error: 'too_many_attempts' })
+  }
+
+  // Verify organizer owns event
+  if (secret) {
+    const { data: event } = await supabase.from('events').select('organizer_id').eq('id', eventId).single()
+    if (!event || event.organizer_id !== secret) {
+      logAuthAttempt('failure', { ip, endpoint: '/api/organizer/certificate-template', reason: 'forbidden' })
+      return res.status(403).json({ error: 'forbidden' })
+    }
   }
 
   if (req.method === 'GET') {

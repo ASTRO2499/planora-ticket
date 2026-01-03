@@ -1,19 +1,46 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { createClient } from '@supabase/supabase-js'
+import {
+  checkOrganizerRateLimit,
+  getClientIp,
+  logAuthAttempt,
+  requireOrganizerToken,
+  recordAuthFailure,
+} from '../../../../../lib/organizerAuth'
+import {
+  enforceHttps,
+  validateRequestOrigin,
+  validateLocalhost,
+  applySecurityHeaders,
+} from '../../../../../lib/mitigation'
 
 const supabase = createClient(process.env.SUPABASE_URL || '', process.env.SUPABASE_SERVICE_KEY || '')
 
 async function requireOrganizer(req: NextApiRequest) {
-  const auth = req.headers.authorization
-  if (!auth?.startsWith('Bearer ')) return null
-  const token = auth.slice('Bearer '.length)
-  const { data } = await supabase.auth.getUser(token)
-  const role = data?.user?.user_metadata?.role
-  if (role === 'organizer' || role === 'admin') return data?.user || null
-  return null
+  return await requireOrganizerToken(req)
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // SECURITY: Apply MITM prevention headers
+  applySecurityHeaders(res)
+  
+  // SECURITY: Enforce HTTPS
+  if (!enforceHttps(req, res)) {
+    return res.status(403).json({ error: 'https_required' })
+  }
+  
+  // SECURITY: Validate request origin
+  if (!validateRequestOrigin(req)) {
+    return res.status(403).json({ error: 'origin_mismatch' })
+  }
+  
+  // SECURITY: Prevent localhost spoofing
+  if (!validateLocalhost(req)) {
+    return res.status(403).json({ error: 'localhost_spoofing_detected' })
+  }
+  
+  const ip = getClientIp(req)
+  
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -23,11 +50,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const organizerSecretRaw = typeof req.headers['x-organizer-secret'] === 'string'
       ? req.headers['x-organizer-secret'].trim()
       : ''
-    const organizerSecret = organizerSecretRaw || null
+    const organizerSecret = (organizerSecretRaw && organizerSecretRaw.length >= 5) ? organizerSecretRaw : null
     const organizerUser = await requireOrganizer(req)
 
     if (!organizerSecret && !organizerUser) {
+      recordAuthFailure(ip)
+      logAuthAttempt('failure', { ip, endpoint: '/api/organizer/subevents/[id]/export-csv', reason: 'no_credentials' })
       return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    // SECURITY: Rate limit organizer secret attempts
+    if (organizerSecret && !checkOrganizerRateLimit(organizerSecret, ip)) {
+      recordAuthFailure(ip)
+      logAuthAttempt('rate_limit', { ip, endpoint: '/api/organizer/subevents/[id]/export-csv' })
+      return res.status(429).json({ error: 'too_many_attempts' })
     }
 
     if (!id || typeof id !== 'string') {

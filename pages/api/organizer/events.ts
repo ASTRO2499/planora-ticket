@@ -2,8 +2,30 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import formidable from 'formidable'
 import fs from 'fs'
 import { createClient } from '@supabase/supabase-js'
+import {
+  getOrganizerSecret,
+  checkOrganizerRateLimit,
+  getClientIp,
+  logAuthAttempt,
+  recordAuthFailure,
+  resetIpFailureCount,
+} from '../../../lib/organizerAuth'
+import {
+  enforceHttps,
+  validateRequestOrigin,
+  validateLocalhost,
+  applySecurityHeaders,
+} from '../../../lib/mitigation'
 
 const supabase = createClient(process.env.SUPABASE_URL || '', process.env.SUPABASE_SERVICE_KEY || '')
+
+/**
+ * SECURITY: Check rate limiting for organizer authentication attempts
+ * Prevents brute force attacks on organizer secret guessing
+ */
+function checkRateLimit(secret: string, ip: string): boolean {
+  return checkOrganizerRateLimit(secret, ip)
+}
 
 /**
  * ORGANIZER AUTHENTICATION ONLY
@@ -33,16 +55,6 @@ async function uploadCover(file: formidable.File) {
   return publicUrl
 }
 
-/**
- * ORGANIZER AUTHENTICATION ONLY
- * Accepts per-event organizer secret from x-organizer-secret header.
- * DO NOT accept admin session cookies or admin secrets.
- */
-function getOrganizerSecret(req: NextApiRequest) {
-  const secret = req.headers['x-organizer-secret']
-  return typeof secret === 'string' ? secret.trim() : null
-}
-
 function parseBoolean(value: any) {
   if (value === undefined || value === null || value === '') return undefined
   if (typeof value === 'boolean') return value
@@ -57,12 +69,58 @@ function parseBoolean(value: any) {
  * ORGANIZER PORTAL ENDPOINT
  * Authentication: Bearer token (organizer role) OR x-organizer-secret ONLY
  * DO NOT merge with admin authentication
+ * SECURITY: Rate limiting + MITM protection
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // SECURITY: Apply MITM prevention headers
+  applySecurityHeaders(res)
+  
+  // SECURITY: Enforce HTTPS
+  if (!enforceHttps(req, res)) {
+    return res.status(403).json({ error: 'https_required' })
+  }
+  
+  // SECURITY: Validate request origin (prevent MITM)
+  if (!validateRequestOrigin(req)) {
+    return res.status(403).json({ error: 'origin_mismatch' })
+  }
+  
+  // SECURITY: Prevent localhost spoofing
+  if (!validateLocalhost(req)) {
+    return res.status(403).json({ error: 'localhost_spoofing_detected' })
+  }
+  
+  const ip = getClientIp(req)
+  
   // CRITICAL: Only organizer auth - reject admin session cookies
   const organizer = await requireOrganizer(req)
   const organizerSecret = getOrganizerSecret(req)
-  if (!organizer && !organizerSecret) return res.status(401).json({ error: 'unauthorized' })
+  
+  if (!organizer && !organizerSecret) {
+    recordAuthFailure(ip)
+    logAuthAttempt('failure', {
+      ip,
+      method: req.method,
+      endpoint: '/api/organizer/events',
+      reason: 'no_credentials',
+      hasAuthHeader: !!req.headers.authorization,
+      hasSecretHeader: !!req.headers['x-organizer-secret']
+    })
+    return res.status(401).json({ error: 'unauthorized' })
+  }
+  
+  // SECURITY: Check if IP is blocked from repeated attacks
+  if (!organizerSecret && checkOrganizerRateLimit('', ip) === false) {
+    logAuthAttempt('blocked', { ip, endpoint: '/api/organizer/events', reason: 'ip_blocked' })
+    return res.status(403).json({ error: 'ip_blocked' })
+  }
+  
+  // SECURITY: Rate limit organizer secret attempts (prevent brute force)
+  if (organizerSecret && !checkOrganizerRateLimit(organizerSecret, ip)) {
+    recordAuthFailure(ip)
+    logAuthAttempt('rate_limit', { ip, endpoint: '/api/organizer/events' })
+    return res.status(429).json({ error: 'too_many_attempts' })
+  }
 
   if (req.method === 'GET') {
     let query = supabase.from('events').select('*').order('created_at', { ascending: false })
@@ -70,7 +128,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       query = query.eq('organizer_id', organizerSecret)
     }
     const { data, error } = await query
-    if (error) return res.status(500).json({ error: error.message })
+    if (error) {
+      console.error('[ORGANIZER_ERROR] Failed to fetch events', { error: error.message, hasSecret: !!organizerSecret })
+      return res.status(500).json({ error: error.message })
+    }
+    // SECURITY: Log successful authentication with organizer secret
+    if (organizerSecret) {
+      logAuthAttempt('success', {
+        ip,
+        endpoint: '/api/organizer/events',
+        method: 'GET',
+        eventCount: data?.length || 0
+      })
+      resetIpFailureCount(ip)
+    }
     return res.json({ events: data })
   }
 

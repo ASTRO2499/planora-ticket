@@ -1,5 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { createClient } from '@supabase/supabase-js'
+import {
+  getOrganizerSecret,
+  checkOrganizerRateLimit,
+  getClientIp,
+  logAuthAttempt,
+  requireOrganizerToken,
+} from '../../../lib/organizerAuth'
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -11,25 +18,23 @@ const supabase = createClient(
  * Validates bearer token with organizer role or organizer secret.
  */
 async function requireOrganizer(req: NextApiRequest) {
-  const auth = req.headers.authorization
-  if (auth?.startsWith('Bearer ')) {
-    const token = auth.slice('Bearer '.length)
-    const { data } = await supabase.auth.getUser(token)
-    const role = data?.user?.user_metadata?.role
-    if (role === 'organizer') return data?.user || null
-  }
-  return null
-}
-
-function getOrganizerSecret(req: NextApiRequest) {
-  const secret = req.headers['x-organizer-secret']
-  return typeof secret === 'string' ? secret.trim() : null
+  return await requireOrganizerToken(req)
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const ip = getClientIp(req)
   const organizer = await requireOrganizer(req)
   const organizerSecret = getOrganizerSecret(req)
-  if (!organizer && !organizerSecret) return res.status(401).json({ error: 'unauthorized' })
+  if (!organizer && !organizerSecret) {
+    logAuthAttempt('failure', { ip, endpoint: '/api/organizer/certificates', reason: 'no_credentials' })
+    return res.status(401).json({ error: 'unauthorized' })
+  }
+
+  // SECURITY: Rate limit organizer secret attempts
+  if (organizerSecret && !checkOrganizerRateLimit(organizerSecret, ip)) {
+    logAuthAttempt('rate_limit', { ip, endpoint: '/api/organizer/certificates' })
+    return res.status(429).json({ error: 'too_many_attempts' })
+  }
 
   if (req.method === 'POST') {
     // Generate certificates for all checked-in attendees of an event

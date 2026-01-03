@@ -2,6 +2,13 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import formidable from 'formidable'
 import fs from 'fs'
 import { createClient } from '@supabase/supabase-js'
+import {
+  getOrganizerSecret,
+  checkOrganizerRateLimit,
+  getClientIp,
+  logAuthAttempt,
+  requireOrganizerToken,
+} from '../../../lib/organizerAuth'
 
 const supabase = createClient(process.env.SUPABASE_URL || '', process.env.SUPABASE_SERVICE_KEY || '')
 const BUCKET = 'ticket-templates'
@@ -14,23 +21,7 @@ export const config = { api: { bodyParser: false } }
  * DO NOT accept admin session cookies or admin secrets.
  */
 async function requireOrganizer(req: NextApiRequest) {
-  const auth = req.headers.authorization
-  if (!auth?.startsWith('Bearer ')) return null
-  const token = auth.slice('Bearer '.length)
-  const { data } = await supabase.auth.getUser(token)
-  const role = data?.user?.user_metadata?.role
-  if (role === 'organizer') return data?.user || null
-  return null
-}
-
-/**
- * ORGANIZER AUTHENTICATION ONLY
- * Accepts per-event organizer secret.
- * DO NOT accept admin session cookies or admin secrets.
- */
-function getOrganizerSecret(req: NextApiRequest) {
-  const secret = req.headers['x-organizer-secret']
-  return typeof secret === 'string' ? secret.trim() : null
+  return await requireOrganizerToken(req)
 }
 
 async function ensureBucket() {
@@ -43,10 +34,21 @@ async function ensureBucket() {
  * DO NOT merge with admin authentication
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const ip = getClientIp(req)
+  
   // CRITICAL: Only organizer auth - reject admin session cookies
   const organizer = await requireOrganizer(req)
   const organizerSecret = getOrganizerSecret(req)
-  if (!organizer && !organizerSecret) return res.status(401).json({ error: 'unauthorized' })
+  if (!organizer && !organizerSecret) {
+    logAuthAttempt('failure', { ip, endpoint: '/api/organizer/templates', reason: 'no_credentials' })
+    return res.status(401).json({ error: 'unauthorized' })
+  }
+
+  // SECURITY: Rate limit organizer secret attempts
+  if (organizerSecret && !checkOrganizerRateLimit(organizerSecret, ip)) {
+    logAuthAttempt('rate_limit', { ip, endpoint: '/api/organizer/templates' })
+    return res.status(429).json({ error: 'too_many_attempts' })
+  }
 
   if (req.method === 'POST') {
     try {

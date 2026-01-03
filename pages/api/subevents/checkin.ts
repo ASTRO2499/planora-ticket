@@ -1,6 +1,18 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { createClient } from '@supabase/supabase-js'
 import { getTransport } from '../../../lib/mailer'
+import {
+  checkOrganizerRateLimit,
+  getClientIp,
+  logAuthAttempt,
+  recordAuthFailure,
+} from '../../../lib/organizerAuth'
+import {
+  enforceHttps,
+  validateRequestOrigin,
+  validateLocalhost,
+  applySecurityHeaders,
+} from '../../../lib/mitigation'
 
 const supabase = createClient(process.env.SUPABASE_URL || '', process.env.SUPABASE_SERVICE_KEY || '')
 
@@ -10,6 +22,21 @@ interface CheckInRequest {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // SECURITY: Apply MITM prevention headers
+  applySecurityHeaders(res)
+  
+  // SECURITY: Enforce HTTPS
+  if (!enforceHttps(req, res)) {
+    return res.status(403).json({ error: 'https_required' })
+  }
+  
+  // SECURITY: Prevent localhost spoofing
+  if (!validateLocalhost(req)) {
+    return res.status(403).json({ error: 'localhost_spoofing_detected' })
+  }
+  
+  const ip = getClientIp(req)
+  
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -21,6 +48,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Missing required fields' })
     }
 
+    // SECURITY: Rate limit organizer secret attempts
+    if (!checkOrganizerRateLimit(organizerSecret, ip)) {
+      recordAuthFailure(ip)
+      logAuthAttempt('rate_limit', { ip, endpoint: '/api/subevents/checkin' })
+      return res.status(429).json({ error: 'too_many_attempts' })
+    }
+
     // Verify organizer
     const { data: organizer, error: orgError } = await supabase
       .from('organizers')
@@ -29,6 +63,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .single()
 
     if (orgError || !organizer) {
+      recordAuthFailure(ip)
+      logAuthAttempt('failure', { ip, endpoint: '/api/subevents/checkin', reason: 'invalid_credentials' })
       return res.status(401).json({ error: 'Invalid organizer credentials' })
     }
 

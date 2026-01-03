@@ -1,6 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { createClient } from '@supabase/supabase-js'
 import nodemailer from 'nodemailer'
+import {
+  getOrganizerSecret,
+  checkOrganizerRateLimit,
+  getClientIp,
+  logAuthAttempt,
+  requireOrganizerToken,
+} from '../../../lib/organizerAuth'
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -11,19 +18,7 @@ const supabase = createClient(
  * ORGANIZER AUTHENTICATION ONLY
  */
 async function requireOrganizer(req: NextApiRequest) {
-  const auth = req.headers.authorization
-  if (auth?.startsWith('Bearer ')) {
-    const token = auth.slice('Bearer '.length)
-    const { data } = await supabase.auth.getUser(token)
-    const role = data?.user?.user_metadata?.role
-    if (role === 'organizer') return data?.user || null
-  }
-  return null
-}
-
-function getOrganizerSecret(req: NextApiRequest) {
-  const secret = req.headers['x-organizer-secret']
-  return typeof secret === 'string' ? secret.trim() : null
+  return await requireOrganizerToken(req)
 }
 
 // Extract folder ID from Google Drive link
@@ -102,11 +97,22 @@ function createTransporter() {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const ip = getClientIp(req)
+  
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
 
   const organizer = await requireOrganizer(req)
   const organizerSecret = getOrganizerSecret(req)
-  if (!organizer && !organizerSecret) return res.status(401).json({ error: 'unauthorized' })
+  if (!organizer && !organizerSecret) {
+    logAuthAttempt('failure', { ip, endpoint: '/api/organizer/send-certificates', reason: 'no_credentials' })
+    return res.status(401).json({ error: 'unauthorized' })
+  }
+
+  // SECURITY: Rate limit secret attempts
+  if (organizerSecret && !checkOrganizerRateLimit(organizerSecret, ip)) {
+    logAuthAttempt('rate_limit', { ip, endpoint: '/api/organizer/send-certificates' })
+    return res.status(429).json({ error: 'too_many_attempts' })
+  }
 
   const { eventId, driveFolderLink, emailContent } = req.body
   
@@ -116,8 +122,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Verify organizer owns this event
   if (organizerSecret) {
-    const { data: ev, error: evErr } = await supabase.from('events').select('id, organizer_secret, title').eq('id', eventId).maybeSingle()
-    if (evErr || !ev || ev.organizer_secret !== organizerSecret) {
+    const { data: ev, error: evErr } = await supabase.from('events').select('id, organizer_id, title').eq('id', eventId).maybeSingle()
+    if (evErr || !ev || ev.organizer_id !== organizerSecret) {
+      logAuthAttempt('failure', { ip, endpoint: '/api/organizer/send-certificates', reason: 'forbidden' })
       return res.status(403).json({ error: 'forbidden' })
     }
   }

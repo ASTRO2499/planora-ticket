@@ -1,5 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { createClient } from '@supabase/supabase-js'
+import {
+  getOrganizerSecret,
+  checkOrganizerRateLimit,
+  getClientIp,
+  logAuthAttempt,
+  requireOrganizerToken,
+} from '../../../lib/organizerAuth'
 
 const supabase = createClient(process.env.SUPABASE_URL || '', process.env.SUPABASE_SERVICE_KEY || '')
 
@@ -8,7 +15,7 @@ const supabase = createClient(process.env.SUPABASE_URL || '', process.env.SUPABA
  * Accepts per-event organizer secret.
  * DO NOT accept admin session cookies or admin secrets.
  */
-function getOrganizerSecret(req: NextApiRequest) {
+function getOrganizerSecretLocal(req: NextApiRequest) {
   const secret = req.headers['x-organizer-secret']
   return typeof secret === 'string' ? secret.trim() : null
 }
@@ -19,14 +26,8 @@ function getOrganizerSecret(req: NextApiRequest) {
  * DO NOT accept admin session cookies or admin secrets.
  */
 async function requireOrganizerId(req: NextApiRequest) {
-  const auth = req.headers.authorization
-  if (!auth?.startsWith('Bearer ')) return null
-  const token = auth.slice('Bearer '.length)
-  const { data, error } = await supabase.auth.getUser(token)
-  if (error || !data?.user) return null
-  const role = data.user.user_metadata?.role
-  if (role !== 'organizer') return null
-  return data.user.id as string
+  const user = await requireOrganizerToken(req)
+  return user?.id as string || null
 }
 
 /**
@@ -35,14 +36,25 @@ async function requireOrganizerId(req: NextApiRequest) {
  * DO NOT merge with admin authentication
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const ip = getClientIp(req)
+  
   if (req.method !== 'GET') return res.status(405).end()
   const eventId = String(req.query.eventId || '')
   if (!eventId) return res.status(400).json({ error: 'missing_event_id' })
 
   // CRITICAL: Only organizer auth - reject admin session cookies
-  const organizerSecret = getOrganizerSecret(req)
+  const organizerSecret = getOrganizerSecretLocal(req)
   const organizerId = await requireOrganizerId(req)
-  if (!organizerSecret && !organizerId) return res.status(401).json({ error: 'unauthorized' })
+  if (!organizerSecret && !organizerId) {
+    logAuthAttempt('failure', { ip, endpoint: '/api/organizer/analytics', reason: 'no_credentials' })
+    return res.status(401).json({ error: 'unauthorized' })
+  }
+
+  // SECURITY: Rate limit organizer secret attempts
+  if (organizerSecret && !checkOrganizerRateLimit(organizerSecret, ip)) {
+    logAuthAttempt('rate_limit', { ip, endpoint: '/api/organizer/analytics' })
+    return res.status(429).json({ error: 'too_many_attempts' })
+  }
 
   const { data: ev, error: evErr } = await supabase
     .from('events')

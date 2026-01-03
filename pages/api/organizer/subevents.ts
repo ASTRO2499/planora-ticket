@@ -1,5 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { createClient } from '@supabase/supabase-js'
+import {
+  getOrganizerSecret,
+  checkOrganizerRateLimit,
+  getClientIp,
+  logAuthAttempt,
+  requireOrganizerToken,
+} from '../../../lib/organizerAuth'
 
 const supabase = createClient(process.env.SUPABASE_URL || '', process.env.SUPABASE_SERVICE_KEY || '')
 
@@ -7,18 +14,7 @@ const supabase = createClient(process.env.SUPABASE_URL || '', process.env.SUPABA
  * ORGANIZER AUTHENTICATION ONLY
  */
 async function requireOrganizer(req: NextApiRequest) {
-  const auth = req.headers.authorization
-  if (!auth?.startsWith('Bearer ')) return null
-  const token = auth.slice('Bearer '.length)
-  const { data } = await supabase.auth.getUser(token)
-  const role = data?.user?.user_metadata?.role
-  if (role === 'organizer') return data?.user || null
-  return null
-}
-
-function getOrganizerSecret(req: NextApiRequest) {
-  const secret = req.headers['x-organizer-secret']
-  return typeof secret === 'string' ? secret.trim() : null
+  return await requireOrganizerToken(req)
 }
 
 /**
@@ -31,11 +27,19 @@ function getOrganizerSecret(req: NextApiRequest) {
  * - DELETE: Delete a sub-event
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const ip = getClientIp(req)
   const organizer = await requireOrganizer(req)
   const organizerSecret = getOrganizerSecret(req)
   
   if (!organizer && !organizerSecret) {
+    logAuthAttempt('failure', { ip, endpoint: '/api/organizer/subevents', reason: 'no_credentials' })
     return res.status(401).json({ error: 'Unauthorized' })
+  }
+
+  // SECURITY: Rate limit secret attempts
+  if (organizerSecret && !checkOrganizerRateLimit(organizerSecret, ip)) {
+    logAuthAttempt('rate_limit', { ip, endpoint: '/api/organizer/subevents' })
+    return res.status(429).json({ error: 'too_many_attempts' })
   }
 
   const eventId = req.query.eventId as string
@@ -58,6 +62,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (organizerSecret && event.organizer_id !== organizerSecret) {
+      logAuthAttempt('failure', { ip, endpoint: '/api/organizer/subevents', reason: 'forbidden' })
       res.status(403).json({ error: 'Forbidden: Not your event' })
       return false
     }

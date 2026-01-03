@@ -97,12 +97,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .update({ current_registrations: newCount })
         .eq('id', subEventId)
 
-      // Send confirmation email (async, don't wait)
-      fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/subevents/send-confirmation-email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ registrationId: registration.id })
-      }).catch(err => console.error('Email send error:', err))
+      // Send confirmation email (don't fail registration if email fails)
+      try {
+        const emailRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/subevents/send-confirmation-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ registrationId: registration.id })
+        })
+        if (!emailRes.ok) {
+          console.error('Email send failed:', { status: emailRes.status, registrationId: registration.id })
+        }
+      } catch (emailErr) {
+        console.error('Email send error:', emailErr, { registrationId: registration.id })
+      }
 
       return res.status(200).json({
         success: true,
@@ -146,12 +153,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .update({ current_registrations: newCount })
         .eq('id', subEventId)
 
-      // Send confirmation email (async, don't wait)
-      fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/subevents/send-confirmation-email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ registrationId: registration.id })
-      }).catch(err => console.error('Email send error:', err))
+      // Send confirmation email (don't fail registration if email fails)
+      try {
+        const emailRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/subevents/send-confirmation-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ registrationId: registration.id })
+        })
+        if (!emailRes.ok) {
+          console.error('Email send failed:', { status: emailRes.status, registrationId: registration.id })
+        }
+      } catch (emailErr) {
+        console.error('Email send error:', emailErr, { registrationId: registration.id })
+      }
     }
 
     return res.status(201).json({

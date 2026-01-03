@@ -1,5 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { createClient } from '@supabase/supabase-js'
+import {
+  getOrganizerSecret,
+  checkOrganizerRateLimit,
+  getClientIp,
+  logAuthAttempt,
+  requireOrganizerToken,
+} from '../../../lib/organizerAuth'
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -7,34 +14,36 @@ const supabase = createClient(
 )
 
 async function requireOrganizer(req: NextApiRequest, eventId: string) {
-  // Check organizer secret header - just verify the event exists
-  const secret = req.headers['x-organizer-secret']
-  console.log('requireOrganizer - secret header:', secret, 'eventId:', eventId)
-  if (typeof secret === 'string' && secret.trim()) {
+  const ip = getClientIp(req)
+  
+  // Check organizer secret header - verify event ownership
+  const secret = getOrganizerSecret(req)
+  if (secret) {
+    // SECURITY: Rate limit attempts
+    if (!checkOrganizerRateLimit(secret, ip)) {
+      logAuthAttempt('rate_limit', { ip, endpoint: '/api/organizer/form-settings' })
+      return false
+    }
+    
     try {
-      const { data: ev } = await supabase.from('events').select('id').eq('id', eventId).maybeSingle()
-      console.log('Event exists for secret auth:', !!ev)
-      if (ev) return true
+      const { data: ev } = await supabase.from('events').select('id, organizer_id').eq('id', eventId).maybeSingle()
+      if (ev && ev.organizer_id === secret) {
+        logAuthAttempt('success', { ip, endpoint: '/api/organizer/form-settings', method: 'secret' })
+        return true
+      }
     } catch (err) {
-      console.error('Event check error:', err)
+      console.error('[ORGANIZER_ERROR] Event check error:', err)
     }
   }
 
   // Check Bearer token
-  const auth = req.headers.authorization
-  console.log('requireOrganizer - auth header:', auth ? 'present' : 'missing')
-  if (auth?.startsWith('Bearer ')) {
-    const token = auth.slice('Bearer '.length)
-    try {
-      const { data } = await supabase.auth.getUser(token)
-      const role = data?.user?.user_metadata?.role
-      console.log('Bearer token - role:', role)
-      if (role === 'organizer') return true
-    } catch (err) {
-      console.error('Bearer token check error:', err)
-    }
+  const organizer = await requireOrganizerToken(req)
+  if (organizer) {
+    logAuthAttempt('success', { ip, endpoint: '/api/organizer/form-settings', method: 'bearer' })
+    return true
   }
   
+  logAuthAttempt('failure', { ip, endpoint: '/api/organizer/form-settings', reason: 'no_valid_auth' })
   return false
 }
 
