@@ -24,6 +24,7 @@ export default function Verify() {
   const [scanCooldown, setScanCooldown] = useState(0)
   const [cameras, setCameras] = useState<any[]>([])
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0)
+  const [sessionScannedIds, setSessionScannedIds] = useState(new Set<string>())
 
   function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -160,6 +161,9 @@ export default function Verify() {
     }
 
     let html5QrCode: any = null
+    let isProcessing = false
+    let lastDetectedQr = ''
+    let lastDetectionTime = 0
 
     const startScanner = async () => {
       try {
@@ -169,14 +173,42 @@ export default function Verify() {
         if (availableCameras && availableCameras.length) {
           setCameras(availableCameras)
           const cameraId = availableCameras[currentCameraIndex]?.id || availableCameras[0].id
+          
+          // Optimized scanner config for continuous scanning
+          const scanConfig = {
+            fps: 15,                    // Increased from 10 for better responsiveness
+            qrbox: { width: 280, height: 280 },  // Larger detection area
+            aspectRatio: 1.0,
+            timeout: 10000,             // 10 second timeout for frame processing
+            disableFlip: false          // Allow camera orientation detection
+          }
+          
           await html5QrCode.start(
             cameraId, 
-            { fps: 10, qrbox: { width: 250, height: 250 } }, 
+            scanConfig,
             async (decodedText: string) => {
-              // Skip scan if still on cooldown
-              if (scanCooldown > 0) {
+              const now = Date.now()
+              
+              // Prevent rapid re-detection of same QR code
+              if (decodedText === lastDetectedQr && (now - lastDetectionTime) < 500) {
                 return
               }
+              
+              lastDetectedQr = decodedText
+              lastDetectionTime = now
+              
+              // Skip if already processing to prevent race conditions
+              if (isProcessing || scanCooldown > 0) {
+                return
+              }
+
+              // Skip if this QR code was already scanned in this session
+              if (sessionScannedIds.has(decodedText)) {
+                toast('✓ Already scanned', { duration: 2000 })
+                return
+              }
+
+              isProcessing = true
 
               const toastId = toast.loading('Verifying ticket...')
               try {
@@ -188,6 +220,9 @@ export default function Verify() {
                 const result = await res.json()
                 
                 if (result.valid) {
+                  // Add to session scanned IDs to prevent re-scanning
+                  setSessionScannedIds(prev => new Set([...prev, decodedText]))
+                  
                   const scanData = {
                     valid: true,
                     id: result.id,
@@ -210,7 +245,7 @@ export default function Verify() {
                   
                   toast.success(`✓ Valid - ${result.name}`, { 
                     id: toastId, 
-                    duration: 5000,
+                    duration: 4000,
                     style: {
                       background: '#10b981',
                       color: '#fff'
@@ -224,7 +259,7 @@ export default function Verify() {
                   })
                   
                   // Set cooldown after successful scan
-                  setScanCooldown(3)
+                  setScanCooldown(2)
                 } else {
                   const scanData = {
                     valid: false,
@@ -245,23 +280,28 @@ export default function Verify() {
                   
                   toast.error(`✗ ${result.reason || 'Invalid'}`, { 
                     id: toastId, 
-                    duration: 5000,
+                    duration: 4000,
                     style: {
                       background: '#ef4444',
                       color: '#fff'
                     }
                   })
                   
-                  // Set longer cooldown for invalid tickets (5 seconds)
-                  setScanCooldown(5)
+                  // Set longer cooldown for invalid tickets (3 seconds)
+                  setScanCooldown(3)
                 }
               } catch (e) {
                 toast.error('Verification failed', { id: toastId })
                 // Set cooldown even on error
-                setScanCooldown(3)
+                setScanCooldown(2)
+              } finally {
+                isProcessing = false
               }
             },
-            (errorMessage: string) => {}
+            (errorMessage: string) => {
+              // Silently handle frame decode errors to avoid console spam
+              // This is normal during continuous scanning
+            }
           )
         }
       } catch (err) {
@@ -275,11 +315,13 @@ export default function Verify() {
     return () => {
       if (html5QrCode) {
         try {
-          html5QrCode.stop()
+          html5QrCode.stop().then(() => {
+            html5QrCode.clear()
+          }).catch(() => {})
         } catch (e) {}
       }
     }
-  }, [isAuthenticated, soundEnabled, scanning, playSound, scanCooldown, currentCameraIndex])
+  }, [isAuthenticated, soundEnabled, scanning, playSound, scanCooldown, currentCameraIndex, sessionScannedIds])
 
   const handleStartScanning = async () => {
     try {

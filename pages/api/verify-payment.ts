@@ -256,41 +256,63 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // send email via SMTP with professional HTML template
     try {
-      const brandPrimary = template?.brandPrimary || '#7C3AED'
-      const brandAccent = template?.brandAccent || '#EC4899'
-      const emailHtml = generateTicketConfirmationEmail({
-        name,
-        email,
-        eventTitle: event?.title || String(insertedTicket?.event_id || 'Your Event'),
-        ticketId,
-        qrCodeUrl: 'cid:qrcode',
-        viewTicketUrl: ticketUrl,
-        pdfDownloadUrl: pdfUrl,
-        eventDate: event?.date ? new Date(event.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined,
-        eventLocation: event?.location,
-        eventDescription: event?.description,
-        brandPrimary,
-        brandAccent,
-        headerTitle: template?.headerTitle || 'ENTRY PASS'
-      })
+      const mailer = getMailer()
+      if (!mailer) {
+        logWarn('email mailer not configured, skipping email', { ticketId })
+      } else {
+        const brandPrimary = template?.brandPrimary || '#7C3AED'
+        const brandAccent = template?.brandAccent || '#EC4899'
+        const emailHtml = generateTicketConfirmationEmail({
+          name,
+          email,
+          eventTitle: event?.title || String(insertedTicket?.event_id || 'Your Event'),
+          ticketId,
+          qrCodeUrl: qrSvg ? 'cid:qrcode' : undefined,
+          viewTicketUrl: ticketUrl,
+          pdfDownloadUrl: pdfUrl,
+          eventDate: event?.date ? new Date(event.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined,
+          eventLocation: event?.location,
+          eventDescription: event?.description,
+          brandPrimary,
+          brandAccent,
+          headerTitle: template?.headerTitle || 'ENTRY PASS'
+        })
 
-      // Convert QR code data URL to buffer for email attachment
-      const qrCodeBuffer = qrSvg ? Buffer.from(qrSvg.replace(/^data:image\/\w+;base64,/, ''), 'base64') : null
+        // Convert QR code data URL to buffer for email attachment
+        const qrCodeBuffer = qrSvg ? Buffer.from(qrSvg.replace(/^data:image\/\w+;base64,/, ''), 'base64') : null
 
-      await getMailer().sendMail({
-        from: process.env.EMAIL_FROM || 'noreply@planora.app',
-        to: email,
-        subject: `Your Entry Pass for ${event?.title || 'the Event'} is Ready ✅`,
-        html: emailHtml,
-        attachments: qrCodeBuffer ? [{
-          filename: 'qrcode.png',
-          content: qrCodeBuffer,
-          cid: 'qrcode'
-        }] : []
-      })
-      logInfo('ticket email sent', { ticketId, email })
+        const mailOptions: any = {
+          from: process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@planora.app',
+          to: email,
+          subject: `✅ Your Entry Pass for ${event?.title || 'the Event'} is Ready`,
+          html: emailHtml,
+          attachments: []
+        }
+
+        // Attach QR code as inline image
+        if (qrCodeBuffer) {
+          mailOptions.attachments.push({
+            filename: 'qrcode.png',
+            content: qrCodeBuffer,
+            cid: 'qrcode'
+          })
+        }
+
+        // Attach PDF ticket
+        if (pdfBuffer && pdfBuffer.length > 0) {
+          mailOptions.attachments.push({
+            filename: `ticket-${ticketId}.pdf`,
+            content: pdfBuffer,
+            contentType: 'application/pdf'
+          })
+        }
+
+        logInfo('sending ticket email', { ticketId, email, attachmentCount: mailOptions.attachments.length })
+        await mailer.sendMail(mailOptions)
+        logInfo('ticket email sent successfully', { ticketId, email })
+      }
     } catch (emailErr) {
-      logWarn('email sending failed, but ticket still issued', { ticketId, email, error: (emailErr as Error)?.message })
+      logError('email sending failed, but ticket still issued', { ticketId, email, error: (emailErr as Error)?.message, stack: (emailErr as Error)?.stack })
     }
     
     await setTicketStatus(supabase, ticketId, 'issued')

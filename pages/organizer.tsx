@@ -723,9 +723,6 @@ export default function OrganizerDashboard() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">Manage Events</h1>
           <div className="flex items-center gap-2">
-            <Link href="/admin">
-              <Button variant="cosmic" size="sm">Admin Panel</Button>
-            </Link>
             {selected && (
               <>
                 <Button
