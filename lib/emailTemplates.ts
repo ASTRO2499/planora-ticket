@@ -102,7 +102,7 @@ export function generateTicketConfirmationEmail(options: EmailTemplateOptions): 
           color: #e5e7eb;
         }
         .greeting {
-          color: #e5e7eb;
+          color: #f1f5f9;
           font-size: 16px;
           margin: 0 0 12px 0;
         }
@@ -111,14 +111,14 @@ export function generateTicketConfirmationEmail(options: EmailTemplateOptions): 
           font-weight: 700;
         }
         .confirmation-text {
-          color: #cbd5e1;
+          color: #e2e8f0;
           font-size: 14px;
           margin: 0 0 24px 0;
           line-height: 1.7;
         }
         .ticket-card {
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(124, 58, 237, 0.35);
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(124, 58, 237, 0.4);
           border-radius: 10px;
           padding: 20px;
           margin: 24px 0;
@@ -145,14 +145,14 @@ export function generateTicketConfirmationEmail(options: EmailTemplateOptions): 
           font-size: 11px;
           font-weight: 700;
           text-transform: uppercase;
-          color: #94a3b8;
+          color: #cbd5e1;
           letter-spacing: 0.6px;
           margin-bottom: 4px;
         }
         .ticket-value {
           font-size: 14px;
           font-weight: 600;
-          color: #e5e7eb;
+          color: #f1f5f9;
           word-break: break-word;
         }
         .ticket-value.accent {
@@ -164,7 +164,7 @@ export function generateTicketConfirmationEmail(options: EmailTemplateOptions): 
           text-align: center;
           margin: 24px 0;
           padding: 20px;
-          background-color: rgba(${hexToRgb(brandAccent)}, 0.10);
+          background-color: rgba(${hexToRgb(brandAccent)}, 0.12);
           border: 2px solid ${brandAccent};
           border-radius: 10px;
           box-shadow: 0 8px 24px rgba(0,0,0,0.25);
@@ -173,7 +173,7 @@ export function generateTicketConfirmationEmail(options: EmailTemplateOptions): 
           font-size: 12px;
           font-weight: 700;
           text-transform: uppercase;
-          color: #cbd5e1;
+          color: #e2e8f0;
           margin-bottom: 12px;
           letter-spacing: 0.5px;
         }
@@ -187,12 +187,12 @@ export function generateTicketConfirmationEmail(options: EmailTemplateOptions): 
         }
         .qr-instruction {
           font-size: 12px;
-          color: #9ca3af;
+          color: #cbd5e1;
           margin-top: 12px;
           line-height: 1.6;
         }
         .event-details {
-          background: rgba(255, 255, 255, 0.03);
+          background: rgba(255, 255, 255, 0.05);
           border-left: 4px solid ${brandPrimary};
           padding: 16px;
           margin: 24px 0;
@@ -201,17 +201,17 @@ export function generateTicketConfirmationEmail(options: EmailTemplateOptions): 
         .event-title {
           font-size: 14px;
           font-weight: 800;
-          color: #f8fafc;
+          color: #ffffff;
           margin: 0 0 4px 0;
         }
         .event-meta {
           font-size: 12px;
-          color: #cbd5e1;
+          color: #e2e8f0;
           margin: 0;
         }
         .event-description {
           font-size: 12px;
-          color: #94a3b8;
+          color: #cbd5e1;
           margin-top: 8px;
           line-height: 1.6;
         }
@@ -243,36 +243,39 @@ export function generateTicketConfirmationEmail(options: EmailTemplateOptions): 
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         }
         .button-secondary {
-          background-color: rgba(255, 255, 255, 0.08);
-          color: #e5e7eb;
-          border: 1px solid rgba(255, 255, 255, 0.14);
+          background-color: rgba(255, 255, 255, 0.10);
+          color: #f1f5f9;
+          border: 1px solid rgba(255, 255, 255, 0.20);
           min-width: 150px;
         }
         .button-secondary:hover {
-          background-color: rgba(255, 255, 255, 0.14);
+          background-color: rgba(255, 255, 255, 0.16);
         }
         .info-box {
-          background-color: rgba(124, 58, 237, 0.12);
+          background-color: rgba(124, 58, 237, 0.15);
           border-left: 4px solid ${brandPrimary};
           padding: 12px 16px;
           margin: 16px 0;
           border-radius: 4px;
           font-size: 12px;
-          color: #e0e7ff;
+          color: #e5e7eb;
           line-height: 1.5;
         }
-        .footer {
-          background-color: #0f172a;
-          border-top: 1px solid rgba(255, 255, 255, 0.06);
+        .info-box strong {
+          color: #f1f5f9;
+        }8);
           padding: 24px;
           text-align: center;
         }
         .footer-text {
           font-size: 12px;
-          color: #cbd5e1;
+          color: #e2e8f0;
           margin: 0 0 8px 0;
           line-height: 1.6;
         }
+        .footer-support {
+          font-size: 11px;
+          color: #cbd5e1
         .footer-support {
           font-size: 11px;
           color: #94a3b8;
@@ -465,10 +468,10 @@ export function generateOtpVerificationEmail(options: {
           background: radial-gradient(circle at 80% 0%, rgba(236,72,153,0.08), transparent 40%),
                       radial-gradient(circle at 20% 20%, rgba(124,58,237,0.10), transparent 40%),
                       #0b1220;
-          color: #e5e7eb;
+          color: #f1f5f9;
         }
         .otp-box {
-          background: linear-gradient(135deg, rgba(${hexToRgb(brandPrimary)}, 0.12) 0%, rgba(${hexToRgb(brandAccent)}, 0.12) 100%);
+          background: linear-gradient(135deg, rgba(${hexToRgb(brandPrimary)}, 0.15) 0%, rgba(${hexToRgb(brandAccent)}, 0.15) 100%);
           border: 2px solid ${brandPrimary};
           border-radius: 10px;
           padding: 24px;
@@ -481,7 +484,7 @@ export function generateOtpVerificationEmail(options: {
           font-size: 11px;
           font-weight: 700;
           text-transform: uppercase;
-          color: #cbd5e1;
+          color: #e2e8f0;
           letter-spacing: 1px;
           margin-bottom: 12px;
         }
@@ -496,24 +499,24 @@ export function generateOtpVerificationEmail(options: {
         }
         .otp-expiry {
           font-size: 12px;
-          color: #9ca3af;
+          color: #cbd5e1;
           margin-top: 12px;
         }
         .info-text {
-          color: #cbd5e1;
+          color: #e2e8f0;
           font-size: 14px;
           line-height: 1.7;
           margin: 16px 0;
         }
         .footer {
           background-color: #0f172a;
-          border-top: 1px solid rgba(255, 255, 255, 0.06);
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
           padding: 16px 24px;
           text-align: center;
         }
         .footer-text {
           font-size: 12px;
-          color: #94a3b8;
+          color: #cbd5e1;
           margin: 0;
           line-height: 1.5;
         }

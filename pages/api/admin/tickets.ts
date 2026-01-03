@@ -95,10 +95,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           email: ticket.email,
           eventTitle,
           ticketId: ticket.id,
-          qrCodeUrl: ticket.qr || undefined,
+          qrCodeUrl: 'cid:qrcode',
           viewTicketUrl: ticketUrl,
           pdfDownloadUrl: pdfUrlToUse,
         })
+
+        // Convert QR code data URL to buffer for email attachment
+        const qrCodeBuffer = ticket.qr ? Buffer.from(ticket.qr.replace(/^data:image\/\w+;base64,/, ''), 'base64') : null
 
         const transporter = getTransport()
         await transporter.sendMail({
@@ -106,6 +109,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           to: ticket.email,
           subject: `Your Entry Pass for ${eventTitle} (Resent)`,
           html: emailHtml,
+          attachments: qrCodeBuffer ? [{
+            filename: 'qrcode.png',
+            content: qrCodeBuffer,
+            cid: 'qrcode'
+          }] : []
         })
 
         return res.json({ ok: true, message: 'Email resent successfully' })

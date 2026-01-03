@@ -4,7 +4,8 @@ import { toast } from 'react-hot-toast'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
-import { ShieldCheck, LogOut, Search, CheckCircle, XCircle, Trash2, Mail, Download, TrendingUp, Users, DollarSign, Edit2, X } from 'lucide-react'
+import { ShieldCheck, LogOut, Search, CheckCircle, XCircle, Trash2, Mail, Download, TrendingUp, Users, DollarSign, Edit2, X, Radio, Home, LayoutDashboard } from 'lucide-react'
+import Link from 'next/link'
 
 type AuthState = 'unknown' | 'authenticated' | 'unauthenticated'
 
@@ -284,9 +285,26 @@ export default function AdminPage() {
           <ShieldCheck className="text-primary" /> Admin Portal
         </h1>
         {isAuthed && (
-          <Button onClick={handleLogout} variant="ghost" className="text-sm h-10 px-4">
-            <LogOut className="w-4 h-4 mr-2" /> Log out
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link href="/">
+              <Button variant="ghost" className="text-sm h-10 px-4">
+                <Home className="w-4 h-4 mr-2" /> Home
+              </Button>
+            </Link>
+            <Link href="/track/console">
+              <Button variant="cosmic" className="text-sm h-10 px-4">
+                <Radio className="w-4 h-4 mr-2" /> Track Console
+              </Button>
+            </Link>
+            <Link href="/organizer">
+              <Button variant="ghost" className="text-sm h-10 px-4">
+                <LayoutDashboard className="w-4 h-4 mr-2" /> Organizer
+              </Button>
+            </Link>
+            <Button onClick={handleLogout} variant="ghost" className="text-sm h-10 px-4">
+              <LogOut className="w-4 h-4 mr-2" /> Log out
+            </Button>
+          </div>
         )}
       </div>
 
@@ -314,17 +332,17 @@ export default function AdminPage() {
           {/* Event Selector */}
           <div className="flex items-center gap-3">
             <label className="text-sm text-slate-400">Event</label>
-            <select value={eventFilter} onChange={e=>setEventFilter(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white">
-              <option value="ALL">All</option>
+            <select value={eventFilter} onChange={e=>setEventFilter(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white" style={{colorScheme: 'dark'}}>
+              <option value="ALL" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>All</option>
               {events.map(ev => (
-                <option key={ev.id} value={ev.id}>{ev.title}</option>
+                <option key={ev.id} value={ev.id} style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>{ev.title}</option>
               ))}
             </select>
             <label className="text-sm text-slate-400 ml-4">View</label>
-            <select value={viewFilter} onChange={e=>setViewFilter(e.target.value as any)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white">
-              <option value="all">All Delegates</option>
-              <option value="checked">Checked-in Delegates</option>
-              <option value="remaining">Remaining Delegates</option>
+            <select value={viewFilter} onChange={e=>setViewFilter(e.target.value as any)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white" style={{colorScheme: 'dark'}}>
+              <option value="all" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>All Delegates</option>
+              <option value="checked" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>Checked-in Delegates</option>
+              <option value="remaining" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>Remaining Delegates</option>
             </select>
           </div>
 

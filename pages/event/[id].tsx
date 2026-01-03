@@ -476,10 +476,11 @@ export default function EventRegistrationPage() {
                       }}
                       disabled={submitting}
                       required={!!f?.required}
+                      style={{colorScheme: 'dark'}}
                     >
-                      <option value="">Select</option>
+                      <option value="" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>Select</option>
                       {(f?.options || []).map((opt: string, i: number) => (
-                        <option key={i} value={opt}>{opt}</option>
+                        <option key={i} value={opt} style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>{opt}</option>
                       ))}
                     </select>
                   ) : f?.type === 'yes_no' ? (
@@ -489,10 +490,11 @@ export default function EventRegistrationPage() {
                       onChange={(e) => { const arr = [...extras]; arr[idx] = e.target.value; setExtras(arr) }}
                       disabled={submitting}
                       required={!!f?.required}
+                      style={{colorScheme: 'dark'}}
                     >
-                      <option value="">Select</option>
-                      <option value="Yes">Yes</option>
-                      <option value="No">No</option>
+                      <option value="" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>Select</option>
+                      <option value="Yes" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>Yes</option>
+                      <option value="No" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>No</option>
                     </select>
                   ) : (
                     <Input

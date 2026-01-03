@@ -263,7 +263,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         email,
         eventTitle: event?.title || String(insertedTicket?.event_id || 'Your Event'),
         ticketId,
-        qrCodeUrl: qrSvg,
+        qrCodeUrl: 'cid:qrcode',
         viewTicketUrl: ticketUrl,
         pdfDownloadUrl: pdfUrl,
         eventDate: event?.date ? new Date(event.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined,
@@ -274,11 +274,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         headerTitle: template?.headerTitle || 'ENTRY PASS'
       })
 
+      // Convert QR code data URL to buffer for email attachment
+      const qrCodeBuffer = qrSvg ? Buffer.from(qrSvg.replace(/^data:image\/\w+;base64,/, ''), 'base64') : null
+
       await getMailer().sendMail({
         from: process.env.EMAIL_FROM || 'noreply@planora.app',
         to: email,
         subject: `Your Entry Pass for ${event?.title || 'the Event'} is Ready ✅`,
         html: emailHtml,
+        attachments: qrCodeBuffer ? [{
+          filename: 'qrcode.png',
+          content: qrCodeBuffer,
+          cid: 'qrcode'
+        }] : []
       })
       logInfo('ticket email sent', { ticketId, email })
     } catch (emailErr) {

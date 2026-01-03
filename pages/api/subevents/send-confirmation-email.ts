@@ -69,52 +69,55 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #1f2937; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; }
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #111827; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; }
           .container { max-width: 600px; margin: 0 auto; }
           
           /* Header */
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 20px; border-radius: 16px 16px 0 0; text-align: center; }
-          .header h1 { font-size: 32px; font-weight: 700; margin-bottom: 10px; }
-          .header p { font-size: 14px; opacity: 0.9; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 20px; border-radius: 16px 16px 0 0; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+          .header h1 { font-size: 32px; font-weight: 700; margin-bottom: 10px; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+          .header p { font-size: 14px; opacity: 0.95; }
           
           /* Success Badge */
-          .success-badge { display: inline-block; background: #10b981; color: white; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.5px; }
+          .success-badge { display: inline-block; background: #059669; color: white; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.5px; }
           
           /* Main Content */
           .content { background: white; padding: 40px 30px; }
-          .content h2 { color: #1f2937; font-size: 24px; margin-bottom: 15px; }
-          .content p { color: #6b7280; margin-bottom: 20px; line-height: 1.8; }
+          .content h2 { color: #111827; font-size: 24px; margin-bottom: 15px; font-weight: 700; }
+          .content p { color: #374151; margin-bottom: 20px; line-height: 1.8; }
+          .content strong { color: #111827; font-weight: 600; }
           
           /* Details Section */
-          .details { background: #f9fafb; border-left: 4px solid #667eea; padding: 20px; border-radius: 8px; margin: 30px 0; }
-          .detail-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #e5e7eb; }
+          .details { background: #f3f4f6; border-left: 4px solid #4f46e5; padding: 20px; border-radius: 8px; margin: 30px 0; }
+          .detail-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #d1d5db; }
           .detail-row:last-child { border-bottom: none; }
-          .detail-label { color: #6b7280; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-          .detail-value { color: #1f2937; font-weight: 600; }
+          .detail-label { color: #4b5563; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+          .detail-value { color: #111827; font-weight: 600; }
           
           /* QR Code */
           .qr-section { text-align: center; padding: 30px 0; }
-          .qr-section h3 { color: #1f2937; margin-bottom: 15px; font-size: 16px; }
-          .qr-code { display: inline-block; background: white; padding: 15px; border-radius: 8px; border: 2px dashed #667eea; }
+          .qr-section h3 { color: #111827; margin-bottom: 15px; font-size: 16px; font-weight: 600; }
+          .qr-code { display: inline-block; background: white; padding: 15px; border-radius: 8px; border: 2px dashed #4f46e5; }
           .qr-code img { width: 250px; height: 250px; display: block; }
-          .qr-hint { color: #6b7280; font-size: 13px; margin-top: 10px; }
+          .qr-hint { color: #4b5563; font-size: 13px; margin-top: 10px; }
           
           /* Action Buttons */
           .actions { margin: 30px 0; text-align: center; }
-          .btn { display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 0 10px; font-size: 14px; transition: transform 0.2s; }
-          .btn:hover { transform: translateY(-2px); }
-          .btn-outline { background: white; color: #667eea; border: 2px solid #667eea; }
+          .btn { display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 0 10px; font-size: 14px; transition: transform 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+          .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+          .btn-outline { background: white; color: #4f46e5; border: 2px solid #4f46e5; }
+          .btn-outline:hover { background: #f3f4f6; }
           
           /* Info Box */
-          .info-box { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 20px; border-radius: 8px; margin: 30px 0; }
-          .info-box h4 { color: #1f2937; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
+          .info-box { background: #dbeafe; border-left: 4px solid #2563eb; padding: 20px; border-radius: 8px; margin: 30px 0; }
+          .info-box h4 { color: #111827; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
           .info-box ul { list-style: none; }
-          .info-box li { color: #6b7280; font-size: 13px; padding: 5px 0; }
-          .info-box li:before { content: "✓ "; color: #10b981; font-weight: 700; margin-right: 8px; }
+          .info-box li { color: #374151; font-size: 13px; padding: 5px 0; line-height: 1.6; }
+          .info-box li:before { content: "✓ "; color: #059669; font-weight: 700; margin-right: 8px; }
           
           /* Footer */
-          .footer { background: #1f2937; color: white; padding: 30px; border-radius: 0 0 16px 16px; text-align: center; font-size: 12px; }
-          .footer a { color: #667eea; text-decoration: none; }
+          .footer { background: #111827; color: #e5e7eb; padding: 30px; border-radius: 0 0 16px 16px; text-align: center; font-size: 12px; }
+          .footer a { color: #818cf8; text-decoration: none; font-weight: 500; }
+          .footer a:hover { color: #a5b4fc; text-decoration: underline; }
           
           /* Responsive */
           @media (max-width: 600px) {

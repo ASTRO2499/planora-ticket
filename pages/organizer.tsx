@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
+import Link from 'next/link'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -721,26 +722,31 @@ export default function OrganizerDashboard() {
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">Manage Events</h1>
-          {selected && (
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push(`/track/console?eventId=${encodeURIComponent(selected.id)}`)}
-                title="Open Track Registration Console page"
-              >
-                Track Console Page
-              </Button>
-              <Button
-                variant={showFormBuilder ? 'primary' : 'outline'}
-                size="sm"
-                onClick={() => setShowFormBuilder(!showFormBuilder)}
-                title="Registration Form Builder"
-              >
-                {showFormBuilder ? 'Close Form Builder' : 'Edit Form'}
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <Link href="/admin">
+              <Button variant="cosmic" size="sm">Admin Panel</Button>
+            </Link>
+            {selected && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/track/console?eventId=${encodeURIComponent(selected.id)}`)}
+                  title="Open Track Registration Console page"
+                >
+                  Track Console Page
+                </Button>
+                <Button
+                  variant={showFormBuilder ? 'primary' : 'outline'}
+                  size="sm"
+                  onClick={() => setShowFormBuilder(!showFormBuilder)}
+                  title="Registration Form Builder"
+                >
+                  {showFormBuilder ? 'Close Form Builder' : 'Edit Form'}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
         <div className="grid md:grid-cols-2 gap-6">
           <Card className="p-6 bg-white/5 border-white/10">
@@ -1008,10 +1014,10 @@ export default function OrganizerDashboard() {
                 <Input value={ticketQuery} onChange={(e)=>setTicketQuery(e.target.value)} placeholder="Search name/email" />
                 <Button variant="ghost" onClick={() => fetchTickets(selected.id)} isLoading={ticketsLoading}>Refresh</Button>
                 <label className="text-xs text-slate-400">View</label>
-                <select value={viewFilter} onChange={e=>setViewFilter(e.target.value as any)} className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-white text-xs">
-                  <option value="all">All</option>
-                  <option value="checked">Checked-in</option>
-                  <option value="remaining">Remaining</option>
+                <select value={viewFilter} onChange={e=>setViewFilter(e.target.value as any)} className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-white text-xs" style={{colorScheme: 'dark'}}>
+                  <option value="all" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>All</option>
+                  <option value="checked" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>Checked-in</option>
+                  <option value="remaining" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>Remaining</option>
                 </select>
                 <Button
                   variant="cosmic"
@@ -1544,10 +1550,10 @@ function SimpleFormBuilder({ eventId, organizerSecret, accessToken }: { eventId:
               </div>
               <div>
                 <div className="text-xs text-slate-400 mb-1">Type</div>
-                <select className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-white text-sm" value={f?.type || 'text'} onChange={(e)=>updateExtra(idx, { type: e.target.value })}>
-                  <option value="text">Text</option>
-                  <option value="select">Dropdown</option>
-                  <option value="yes_no">Yes/No</option>
+                <select className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-white text-sm" value={f?.type || 'text'} onChange={(e)=>updateExtra(idx, { type: e.target.value })} style={{colorScheme: 'dark'}}>
+                  <option value="text" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>Text</option>
+                  <option value="select" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>Dropdown</option>
+                  <option value="yes_no" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>Yes/No</option>
                 </select>
               </div>
             </div>

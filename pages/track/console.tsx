@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
+import Link from 'next/link'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -135,7 +136,12 @@ export default function TrackConsolePage() {
             <div className="text-sm text-slate-400">Organizer</div>
             <h1 className="text-3xl font-bold">Track Registration Console</h1>
           </div>
-          <Button variant="outline" onClick={() => router.push('/organizer')}>Back to Organizer</Button>
+          <div className="flex items-center gap-2">
+            <Link href="/admin">
+              <Button variant="cosmic">Admin Panel</Button>
+            </Link>
+            <Button variant="outline" onClick={() => router.push('/organizer')}>Back to Organizer</Button>
+          </div>
         </div>
 
         <Card className="p-4 bg-white/5 border-white/10 space-y-3">
