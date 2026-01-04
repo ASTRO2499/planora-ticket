@@ -3,7 +3,7 @@ import Razorpay from 'razorpay'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end()
-  const { name, email, amount: bodyAmount } = req.body
+  const { name, email, amount: bodyAmount, selectedTier, tierPrice } = req.body
   const key = process.env.RAZORPAY_KEY_ID || ''
   const secret = process.env.RAZORPAY_KEY_SECRET || ''
   if (!key || !secret) {
@@ -21,9 +21,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       amount,
       currency: 'INR',
       receipt: `rcpt_${Date.now()}`,
-      notes: { name, email } // Optional: add simple notes
+      notes: { name, email, selectedTier, tierPrice } // Include tier info in notes
     })
-    return res.json({ orderId: order.id, amount: order.amount, razorpayKey: key })
+    return res.json({ orderId: order.id, amount: order.amount, razorpayKey: key, selectedTier, tierPrice })
   } catch (err) {
     console.error(err)
     return res.status(500).json({ error: 'order_failed' })

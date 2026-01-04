@@ -734,6 +734,14 @@ export default function OrganizerDashboard() {
                   Track Console Page
                 </Button>
                 <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/organizer/event/${encodeURIComponent(selected.id)}/pricing`)}
+                  title="Configure pricing tiers for this event"
+                >
+                  Pricing Tiers
+                </Button>
+                <Button
                   variant={showFormBuilder ? 'primary' : 'outline'}
                   size="sm"
                   onClick={() => setShowFormBuilder(!showFormBuilder)}

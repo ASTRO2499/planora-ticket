@@ -96,6 +96,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const phone = (metadata?.phone || '').trim()
   const college = (metadata?.college || '').trim()
   const ieee = (metadata?.ieee || '').trim()
+  const selectedTier = (metadata?.selectedTier || 'tier_1').trim()
+  const tierPrice = Number(metadata?.tierPrice || 0)
   const extras: Array<string> = Array.isArray(metadata?.extras) ? metadata.extras.slice(0, 5) : []
   if (!name || !email) return res.status(400).json({ error: 'missing_user_details' })
 
@@ -140,6 +142,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       razorpay_payment_id,
       razorpay_signature,
       amount_paid: metadata?.amount || null,
+      tier_selected: selectedTier,
+      tier_price: tierPrice,
       status: 'pending',
       created_at: new Date(),
     }]).select().single()

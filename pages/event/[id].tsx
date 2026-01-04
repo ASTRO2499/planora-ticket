@@ -45,6 +45,7 @@ export default function EventRegistrationPage() {
   const [ieee, setIeee] = useState('')
   const [formSettings, setFormSettings] = useState<any>(null)
   const [extras, setExtras] = useState<string[]>(['', '', '', '', ''])
+  const [selectedTier, setSelectedTier] = useState('tier_1')
 
   useEffect(() => {
     if (!id) return
@@ -106,18 +107,28 @@ export default function EventRegistrationPage() {
     setSubmitting(true)
 
     try {
+      // Calculate amount based on selected tier
+      let amount = event.price_inr
+      if (event.tier_1_enabled && selectedTier === 'tier_1') {
+        amount = event.tier_1_price || event.price_inr
+      } else if (event.tier_2_enabled && selectedTier === 'tier_2') {
+        amount = event.tier_2_price || event.price_inr
+      }
+
       // Create order
       const orderRes = await fetch('/api/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: Math.round(Number(event.price_inr) * 100),
+          amount: Math.round(Number(amount) * 100),
           eventId: event.id,
           name,
           email,
           phone,
           college,
-          ieee
+          ieee,
+          selectedTier,
+          tierPrice: amount
         })
       })
 
@@ -138,7 +149,7 @@ export default function EventRegistrationPage() {
 
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_Rry2rwBqAIzSSw',
-        amount: event.price_inr * 100,
+        amount: Math.round(Number(amount) * 100),
         currency: 'INR',
         name: event.title,
         description: `Registration for ${event.title}`,
@@ -410,6 +421,57 @@ export default function EventRegistrationPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+              {/* Tier Selection */}
+              {(event.tier_1_enabled || event.tier_2_enabled) && (
+                <div className="p-4 sm:p-5 rounded-lg bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 border border-violet-500/30 space-y-3 sm:space-y-4">
+                  <h3 className="text-sm sm:text-base font-semibold text-white">Select Registration Type</h3>
+                  <div className="space-y-2">
+                    {event.tier_1_enabled && (
+                      <label className="flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all"
+                        style={{
+                          borderColor: selectedTier === 'tier_1' ? '#667eea' : '#374151',
+                          backgroundColor: selectedTier === 'tier_1' ? 'rgba(102, 126, 234, 0.1)' : 'transparent'
+                        }}>
+                        <input
+                          type="radio"
+                          name="tier"
+                          value="tier_1"
+                          checked={selectedTier === 'tier_1'}
+                          onChange={(e) => setSelectedTier(e.target.value)}
+                          className="w-4 h-4"
+                          disabled={submitting}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm sm:text-base font-semibold text-white">{event.tier_1_name || 'Option 1'}</div>
+                          <div className="text-xs sm:text-sm text-slate-400">₹{event.tier_1_price || 0}</div>
+                        </div>
+                      </label>
+                    )}
+                    {event.tier_2_enabled && (
+                      <label className="flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all"
+                        style={{
+                          borderColor: selectedTier === 'tier_2' ? '#667eea' : '#374151',
+                          backgroundColor: selectedTier === 'tier_2' ? 'rgba(102, 126, 234, 0.1)' : 'transparent'
+                        }}>
+                        <input
+                          type="radio"
+                          name="tier"
+                          value="tier_2"
+                          checked={selectedTier === 'tier_2'}
+                          onChange={(e) => setSelectedTier(e.target.value)}
+                          className="w-4 h-4"
+                          disabled={submitting}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm sm:text-base font-semibold text-white">{event.tier_2_name || 'Option 2'}</div>
+                          <div className="text-xs sm:text-sm text-slate-400">₹{event.tier_2_price || 0}</div>
+                        </div>
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="text-sm text-slate-300 mb-1 block">Full Name *</label>
                 <Input
@@ -515,7 +577,18 @@ export default function EventRegistrationPage() {
                   className="w-full text-sm sm:text-base"
                   isLoading={submitting}
                 >
-                  Pay ₹{event.price_inr} & Register
+                  {(() => {
+                    const amount = (() => {
+                      let amt = event.price_inr
+                      if (event.tier_1_enabled && selectedTier === 'tier_1') {
+                        amt = event.tier_1_price || event.price_inr
+                      } else if (event.tier_2_enabled && selectedTier === 'tier_2') {
+                        amt = event.tier_2_price || event.price_inr
+                      }
+                      return amt
+                    })()
+                    return `Pay ₹${amount} & Register`
+                  })()}
                 </Button>
               </div>
             </form>
