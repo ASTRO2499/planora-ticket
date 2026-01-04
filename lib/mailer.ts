@@ -42,6 +42,8 @@ function buildResendTransport() {
     return null
   }
   
+  console.log('🔧 Building Resend transport with API key:', apiKey.substring(0, 8) + '...')
+  
   try {
     const transporter = nodemailer.createTransport({
       host: 'smtp.resend.com',
@@ -60,6 +62,7 @@ function buildResendTransport() {
 }
 
 export function getTransport() {
+  console.log('🚀 Initializing email transport, provider:', provider)
   try {
     if (provider === 'resend') {
       return buildResendTransport()

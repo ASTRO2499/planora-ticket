@@ -31,42 +31,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('Starting email process:', { registrationId, email: registration.email, subEvent: registration.sub_events?.title })
 
-    // Generate QR code
-    const qrRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/subevents/generate-qr`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        registrationId,
-        subEventId: registration.sub_event_id,
-        email: registration.email
-      })
-    })
-
+    // Generate QR code directly instead of internal API call
     let qrCodeDataUrl = null
     let qrCodeBuffer = null
-    if (qrRes.ok) {
-      const qrData = await qrRes.json()
-      qrCodeDataUrl = qrData.qrCodeUrl
+    try {
+      const QRCode = (await import('qrcode')).default
+      const qrData = JSON.stringify({
+        registrationId,
+        subEventId: registration.sub_event_id,
+        email: registration.email,
+        timestamp: new Date().toISOString()
+      })
       
-      // Convert data URL to buffer for email attachment
+      qrCodeDataUrl = await QRCode.toDataURL(qrData, {
+        errorCorrectionLevel: 'H',
+        type: 'image/png',
+        width: 300,
+        margin: 2,
+        color: { dark: '#000000', light: '#FFFFFF' }
+      })
+      
       if (qrCodeDataUrl) {
         const base64Data = qrCodeDataUrl.replace(/^data:image\/\w+;base64,/, '')
         qrCodeBuffer = Buffer.from(base64Data, 'base64')
       }
       console.log('QR code generated successfully:', { registrationId, hasBuffer: !!qrCodeBuffer })
-    } else {
-      console.error('QR code generation failed:', { status: qrRes.status, registrationId })
+    } catch (qrErr) {
+      console.error('QR code generation failed:', { registrationId, error: qrErr instanceof Error ? qrErr.message : String(qrErr) })
     }
 
-    // Generate PDF
-    const pdfRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/subevents/registration-pdf?id=${registrationId}`)
+    // Generate PDF directly instead of internal API call
     let pdfBuffer = null
-    if (pdfRes.ok) {
-      const pdfData = await pdfRes.arrayBuffer()
-      pdfBuffer = Buffer.from(pdfData)
-      console.log('PDF generated successfully:', { registrationId, size: pdfBuffer.length })
-    } else {
-      console.error('PDF generation failed:', { status: pdfRes.status, registrationId })
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `https://${req.headers.host}` || 'http://localhost:3000'
+      const pdfUrl = `${baseUrl}/api/subevents/registration-pdf?id=${registrationId}`
+      console.log('Fetching PDF from:', pdfUrl)
+      
+      const pdfRes = await fetch(pdfUrl)
+      if (pdfRes.ok) {
+        const pdfData = await pdfRes.arrayBuffer()
+        pdfBuffer = Buffer.from(pdfData)
+        console.log('PDF generated successfully:', { registrationId, size: pdfBuffer.length })
+      } else {
+        console.error('PDF generation failed:', { status: pdfRes.status, statusText: pdfRes.statusText, registrationId })
+      }
+    } catch (pdfErr) {
+      console.error('PDF fetch error:', { registrationId, error: pdfErr instanceof Error ? pdfErr.message : String(pdfErr) })
     }
 
     // Send confirmation email
@@ -85,7 +95,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('Email transporter ready, preparing email:', { registrationId, to: registration.email })
     
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `https://${req.headers.host}` || 'http://localhost:3000'
     const viewUrl = `${baseUrl}/track-success?registrationId=${registrationId}`
     
     const emailContent = generateTrackRegistrationEmail({
@@ -108,7 +118,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
     const mailOptions: any = {
-      from: process.env.SMTP_FROM || 'noreply@planora.com',
+      from: process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@planora.com',
       to: registration.email,
       subject: `✓ Registration Confirmed: ${registration.sub_events?.title}`,
       html: emailContent,

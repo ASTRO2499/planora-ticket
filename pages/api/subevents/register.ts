@@ -99,16 +99,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Send confirmation email (don't fail registration if email fails)
       try {
+        console.log('📧 Sending track confirmation email (draft->submitted):', { registrationId: registration.id, email })
         const emailRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/subevents/send-confirmation-email`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ registrationId: registration.id })
         })
         if (!emailRes.ok) {
-          console.error('Email send failed:', { status: emailRes.status, registrationId: registration.id })
+          const errorText = await emailRes.text()
+          console.error('❌ Track email send failed:', { status: emailRes.status, registrationId: registration.id, error: errorText })
+        } else {
+          console.log('✅ Track confirmation email sent successfully:', { registrationId: registration.id })
         }
       } catch (emailErr) {
-        console.error('Email send error:', emailErr, { registrationId: registration.id })
+        console.error('❌ Track email send error:', emailErr instanceof Error ? emailErr.message : String(emailErr), { registrationId: registration.id })
       }
 
       return res.status(200).json({
@@ -155,16 +159,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Send confirmation email (don't fail registration if email fails)
       try {
+        console.log('📧 Sending track confirmation email:', { registrationId: registration.id, email })
         const emailRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/subevents/send-confirmation-email`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ registrationId: registration.id })
         })
         if (!emailRes.ok) {
-          console.error('Email send failed:', { status: emailRes.status, registrationId: registration.id })
+          const errorText = await emailRes.text()
+          console.error('❌ Track email send failed:', { status: emailRes.status, registrationId: registration.id, error: errorText })
+        } else {
+          console.log('✅ Track confirmation email sent successfully:', { registrationId: registration.id })
         }
       } catch (emailErr) {
-        console.error('Email send error:', emailErr, { registrationId: registration.id })
+        console.error('❌ Track email send error:', emailErr instanceof Error ? emailErr.message : String(emailErr), { registrationId: registration.id })
       }
     }
 

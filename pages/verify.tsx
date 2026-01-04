@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Head from 'next/head'
 import { motion } from 'framer-motion'
 import { Card } from '../components/ui/Card'
@@ -20,11 +20,21 @@ export default function Verify() {
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [showHistory, setShowHistory] = useState(false)
   const [scanning, setScanning] = useState(false)
-  const [scriptLoaded, setScriptLoaded] = useState(false)
   const [scanCooldown, setScanCooldown] = useState(0)
   const [cameras, setCameras] = useState<any[]>([])
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0)
-  const [sessionScannedIds, setSessionScannedIds] = useState(new Set<string>())
+  const sessionScannedIdsRef = useRef<Set<string>>(new Set())
+  const scannerRef = useRef<any>(null)
+  const restartLockRef = useRef(false)
+  const scanCooldownRef = useRef(0)
+
+  const updateScanCooldown = useCallback((next: number | ((c: number) => number)) => {
+    setScanCooldown(prev => {
+      const value = typeof next === 'function' ? (next as (c: number) => number)(prev) : next
+      scanCooldownRef.current = value
+      return value
+    })
+  }, [])
 
   function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -43,13 +53,12 @@ export default function Verify() {
   async function loadHtml5QrLib() {
     if (typeof window === 'undefined') return
     if ((globalThis as any).Html5Qrcode) {
-      setScriptLoaded(true)
       return
     }
     return new Promise<void>((resolve, reject) => {
       const existing = document.getElementById('html5-qrcode-lib') as HTMLScriptElement | null
       if (existing) {
-        existing.onload = () => { setScriptLoaded(true); resolve() }
+        existing.onload = () => { resolve() }
         existing.onerror = () => reject(new Error('Failed to load html5-qrcode'))
         return
       }
@@ -57,7 +66,7 @@ export default function Verify() {
       script.id = 'html5-qrcode-lib'
       script.src = 'https://unpkg.com/html5-qrcode'
       script.async = true
-      script.onload = () => { setScriptLoaded(true); resolve() }
+      script.onload = () => { resolve() }
       script.onerror = () => reject(new Error('Failed to load html5-qrcode'))
       document.body.appendChild(script)
     })
@@ -68,6 +77,7 @@ export default function Verify() {
     localStorage.removeItem('verify_auth')
     setScanHistory([])
     setStats({ total: 0, valid: 0, invalid: 0 })
+    sessionScannedIdsRef.current.clear()
     toast.success('Logged out')
   }
 
@@ -112,12 +122,15 @@ export default function Verify() {
     }
   }
 
-  async function handleManualCheckIn(ticketId: string) {
+  async function handleManualCheckIn(ticketId: string, isSubEvent: boolean = false) {
     try {
-      const res = await fetch('/api/verify-ticket', {
+      const endpoint = isSubEvent ? '/api/subevents/verify-qr' : '/api/verify-ticket'
+      const payload = isSubEvent ? { registrationId: ticketId } : { ticketId }
+      
+      const res = await fetch(endpoint, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticketId })
+        body: JSON.stringify(payload)
       })
 
       if (res.ok) {
@@ -144,11 +157,11 @@ export default function Verify() {
   useEffect(() => {
     if (scanCooldown > 0) {
       const timer = setInterval(() => {
-        setScanCooldown(c => Math.max(0, c - 1))
+        updateScanCooldown(c => Math.max(0, c - 1))
       }, 1000)
       return () => clearInterval(timer)
     }
-  }, [scanCooldown])
+  }, [scanCooldown, updateScanCooldown])
 
   // Device-responsive configuration for optimal scanning
   const getOptimalScanConfig = useCallback(() => {
@@ -231,13 +244,18 @@ export default function Verify() {
     const startScanner = async () => {
       try {
         html5QrCode = new Html5Qrcode("reader")
+        scannerRef.current = html5QrCode
         const availableCameras = await Html5Qrcode.getCameras()
         
         if (availableCameras && availableCameras.length) {
           setCameras(availableCameras)
-          const cameraId = availableCameras[currentCameraIndex]?.id || availableCameras[0].id
+          const preferredCamera = availableCameras.find((c: any) => /back|rear|environment/i.test(c.label || ''))
+          const cameraId = availableCameras[currentCameraIndex]?.id || preferredCamera?.id || availableCameras[0].id
           
-          const scanConfig = getOptimalScanConfig()
+          const scanConfig = {
+            ...getOptimalScanConfig(),
+            videoConstraints: { facingMode: 'environment' }
+          }
           frameSkip = (scanConfig as any).frameSkip || 1
           
           await html5QrCode.start(
@@ -261,12 +279,12 @@ export default function Verify() {
               lastDetectionTime = now
               
               // Skip if already processing or in cooldown
-              if (isProcessing || scanCooldown > 0) {
+              if (isProcessing || scanCooldownRef.current > 0) {
                 return
               }
 
               // Skip if already scanned in this session
-              if (sessionScannedIds.has(decodedText)) {
+              if (sessionScannedIdsRef.current.has(decodedText)) {
                 return
               }
 
@@ -274,22 +292,37 @@ export default function Verify() {
 
               const toastId = toast.loading('Verifying ticket...')
               try {
-                const res = await fetch('/api/verify-ticket', {
+                // Detect if QR is JSON (sub-event) or pipe-delimited (regular ticket)
+                let endpoint = '/api/verify-ticket'
+                let payload: any = { data: decodedText }
+                
+                try {
+                  const parsed = JSON.parse(decodedText)
+                  if (parsed.registrationId && parsed.subEventId) {
+                    // Sub-event QR code
+                    endpoint = '/api/subevents/verify-qr'
+                    payload = { data: decodedText }
+                  }
+                } catch (e) {
+                  // Not JSON, use regular ticket format
+                }
+
+                const res = await fetch(endpoint, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ data: decodedText })
+                  body: JSON.stringify(payload)
                 })
                 const result = await res.json()
                 
                 if (result.valid) {
-                  setSessionScannedIds(prev => new Set([...prev, decodedText]))
+                  sessionScannedIdsRef.current.add(decodedText)
                   
                   const scanData = {
                     valid: true,
                     id: result.id,
                     name: result.name,
                     email: result.email,
-                    event: result.event_id,
+                    event: result.event_id || result.trackTitle || 'Track',
                     time: new Date().toLocaleTimeString(),
                     timestamp: Date.now()
                   }
@@ -313,13 +346,17 @@ export default function Verify() {
                     }
                   })
                   
-                  await fetch('/api/verify-ticket', {
+                  // Mark as checked in (ticketId for regular, registrationId for sub-event)
+                  await fetch(endpoint, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ticketId: result.id })
+                    body: JSON.stringify({ 
+                      ticketId: result.id,
+                      registrationId: result.id 
+                    })
                   })
                   
-                  setScanCooldown(2)
+                  updateScanCooldown(2)
                 } else {
                   const scanData = {
                     valid: false,
@@ -347,18 +384,30 @@ export default function Verify() {
                     }
                   })
                   
-                  setScanCooldown(1.5)
+                  updateScanCooldown(1.5)
                 }
               } catch (e) {
                 console.error('Scan error:', e)
                 toast.error('Verification failed', { duration: 2000 })
-                setScanCooldown(1)
+                updateScanCooldown(1)
               } finally {
                 isProcessing = false
               }
             },
             (errorMessage: string) => {
-              // Silently ignore frame decode errors
+              // Silently ignore frame decode errors unless the camera feed died; auto-recover
+              const fatal = /NotReadableError|AbortError|ended|video stream has ended|no camera/i.test(errorMessage || '')
+              if (fatal && scanning && !restartLockRef.current) {
+                restartLockRef.current = true
+                try {
+                  html5QrCode.stop().catch(() => {})
+                  html5QrCode.clear().catch(() => {})
+                } catch (e) {}
+                setTimeout(() => {
+                  if (scanning) startScanner()
+                  restartLockRef.current = false
+                }, 600)
+              }
             }
           )
         }
@@ -378,12 +427,15 @@ export default function Verify() {
           }).catch(() => {})
         } catch (e) {}
       }
+      scannerRef.current = null
+      restartLockRef.current = false
     }
-  }, [isAuthenticated, soundEnabled, scanning, playSound, scanCooldown, currentCameraIndex, sessionScannedIds, getOptimalScanConfig])
+  }, [isAuthenticated, scanning, playSound, currentCameraIndex, getOptimalScanConfig])
 
   const handleStartScanning = async () => {
     try {
       await loadHtml5QrLib()
+      sessionScannedIdsRef.current.clear()
       setScanning(true)
       toast.success('Camera started. Ready to scan.')
     } catch (err) {
@@ -623,18 +675,20 @@ export default function Verify() {
                     <div className="flex items-center justify-between">
                       <div className="font-semibold text-white">{searchResult.name}</div>
                       <div className={`px-2 py-1 rounded text-xs ${
-                        searchResult.used 
+                        searchResult.used || searchResult.checked_in
                           ? 'bg-red-500/20 text-red-400' 
                           : 'bg-green-500/20 text-green-400'
                       }`}>
-                        {searchResult.used ? 'Used' : 'Valid'}
+                        {searchResult.used || searchResult.checked_in ? 'Checked In' : 'Valid'}
                       </div>
                     </div>
                     <div className="text-slate-400 text-sm">{searchResult.email}</div>
-                    <div className="text-slate-500 text-xs">Event: {searchResult.event_id || 'N/A'}</div>
-                    {!searchResult.used && (
+                    <div className="text-slate-500 text-xs">
+                      {searchResult.event_id ? `Event: ${searchResult.event_id}` : `Track: ${searchResult.sub_events?.title || 'N/A'}`}
+                    </div>
+                    {!searchResult.used && !searchResult.checked_in && (
                       <Button 
-                        onClick={() => handleManualCheckIn(searchResult.id)}
+                        onClick={() => handleManualCheckIn(searchResult.id, !!searchResult.sub_event_id)}
                         variant="primary"
                         className="w-full mt-2"
                       >

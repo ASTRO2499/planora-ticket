@@ -140,7 +140,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     `
 
     await transporter.sendMail({
-      from: process.env.SMTP_FROM || 'noreply@planora.com',
+      from: process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@planora.com',
       to: registration.email,
       subject: `Check-in Confirmed: ${registration.sub_events?.title}`,
       html: emailContent
