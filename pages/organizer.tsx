@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
@@ -10,6 +10,14 @@ import supabase from '../lib/supabaseClient'
 import { Award, Edit2, Ticket } from 'lucide-react'
 import SuccessAnimation from '../components/SuccessAnimation'
 import CouponManager from '../components/CouponManager'
+
+const FORM_BASE_DEFAULTS: Record<string, any> = {
+  name: { label: 'Full Name', required: true, enabled: true },
+  email: { label: 'Email Address', required: true, enabled: true },
+  phone: { label: 'Phone Number', required: false, enabled: true },
+  college: { label: 'College/Institution', required: false, enabled: true },
+  ieee: { label: 'IEEE Membership Number', required: false, enabled: false },
+}
 
 export default function OrganizerDashboard() {
   const router = useRouter()
@@ -1012,11 +1020,6 @@ export default function OrganizerDashboard() {
                               style={{ height: `${pct}%`, minHeight: '2px' }}
                               title={`${d.day}: ${d.count}`}
                             />
-                            <div className="flex justify-end mt-3">
-                              <Button variant="ghost" size="sm" onClick={() => removeExtra(idx)} className="text-red-300">
-                                Remove
-                              </Button>
-                            </div>
                             <div className="text-[8px] text-slate-500">{d.day.slice(5)}</div>
                           </div>
                         )
@@ -1496,18 +1499,10 @@ function SimpleFormBuilder({ eventId, organizerSecret, accessToken }: { eventId:
   const [loading, setLoading] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
 
-  const baseDefaults: Record<string, any> = {
-    name: { label: 'Full Name', required: true, enabled: true },
-    email: { label: 'Email Address', required: true, enabled: true },
-    phone: { label: 'Phone Number', required: false, enabled: true },
-    college: { label: 'College/Institution', required: false, enabled: true },
-    ieee: { label: 'IEEE Membership Number', required: false, enabled: false },
-  }
-
-  function normalizeConfig(cfg: any) {
+  const normalizeConfig = useCallback((cfg: any) => {
     const next = { ...(cfg || {}) }
     const mergedBase: Record<string, any> = {}
-    Object.entries(baseDefaults).forEach(([key, value]) => {
+    Object.entries(FORM_BASE_DEFAULTS).forEach(([key, value]) => {
       mergedBase[key] = { ...value, ...(cfg?.base?.[key] || {}) }
     })
     // Preserve any unknown base keys if present
@@ -1517,7 +1512,7 @@ function SimpleFormBuilder({ eventId, organizerSecret, accessToken }: { eventId:
     next.base = mergedBase
     next.extras = (cfg?.extras || []).slice(0, 5)
     return next
-  }
+  }, [])
 
   const [config, setConfig] = useState<any>(normalizeConfig({}))
 
@@ -1539,7 +1534,7 @@ function SimpleFormBuilder({ eventId, organizerSecret, accessToken }: { eventId:
       setLoading(false)
     }
     load()
-  }, [eventId, accessToken, organizerSecret])
+  }, [eventId, accessToken, organizerSecret, normalizeConfig])
 
   function updateBase(key: string, patch: any) {
     setConfig((prev: any) => ({ ...prev, base: { ...(prev.base || {}), [key]: { ...(prev.base?.[key] || {}), ...patch } } }))
@@ -1591,7 +1586,7 @@ function SimpleFormBuilder({ eventId, organizerSecret, accessToken }: { eventId:
       <SuccessAnimation isVisible={showSuccess} message="Form settings saved successfully!" />
       <div className="grid sm:grid-cols-3 gap-3">
         {['name','email','phone','college','ieee'].map((key) => {
-          const field = config?.base?.[key] || baseDefaults[key] || {}
+          const field = config?.base?.[key] || FORM_BASE_DEFAULTS[key] || {}
           const locked = key === 'name' || key === 'email'
           return (
             <div key={key} className="bg-white/5 border border-white/10 rounded-xl p-3">
