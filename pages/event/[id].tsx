@@ -173,7 +173,10 @@ export default function EventRegistrationPage() {
                   phone,
                   college,
                   ieee,
-                  extras: extraValues
+                  extras: extraValues,
+                  selectedTier: selectedTier,
+                  tierPrice: amount,
+                  amount: Math.round(Number(amount) * 100)
                 }
               })
             })

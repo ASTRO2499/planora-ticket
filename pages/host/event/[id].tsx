@@ -65,7 +65,10 @@ export default function EventCheckoutPage() {
                   email: email,
                   phone: phone,
                   eventId: id,
-                  type: 'hosting_fee'
+                  type: 'hosting_fee',
+                  selectedTier: 'tier_1',
+                  tierPrice: HOSTING_FEE,
+                  amount: HOSTING_FEE_PAISE
                 }
               })
             })

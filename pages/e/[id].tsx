@@ -81,7 +81,17 @@ export default function EventPage() {
             const verify = await fetch('/api/verify-payment', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ...response, metadata: { name, email, eventId: id } })
+              body: JSON.stringify({ 
+                ...response, 
+                metadata: { 
+                  name, 
+                  email, 
+                  eventId: id,
+                  selectedTier: 'tier_1',
+                  tierPrice: event?.price_inr || 0,
+                  amount: Math.round(Number(event?.price_inr || 0) * 100)
+                } 
+              })
             })
             const v = await verify.json()
             if (v?.ticketUrl) {
