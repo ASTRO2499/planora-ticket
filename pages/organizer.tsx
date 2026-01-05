@@ -7,8 +7,9 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { toast } from 'react-hot-toast'
 import supabase from '../lib/supabaseClient'
-import { Award, Edit2 } from 'lucide-react'
+import { Award, Edit2, Ticket } from 'lucide-react'
 import SuccessAnimation from '../components/SuccessAnimation'
+import CouponManager from '../components/CouponManager'
 
 export default function OrganizerDashboard() {
   const router = useRouter()
@@ -31,7 +32,7 @@ export default function OrganizerDashboard() {
   const [driveFolderLink, setDriveFolderLink] = useState('')
   const [emailContent, setEmailContent] = useState('Dear #name,\n\nCongratulations on successfully completing the event!\n\nWe are pleased to present your certificate of participation for representing #College.\n\nYour certificate is attached with this email.\n\nBest regards,\nEvent Team')
   const [sendingEmails, setSendingEmails] = useState(false)
-  const [tab, setTab] = useState<'details' | 'certificates'>('details')
+  const [tab, setTab] = useState<'details' | 'certificates' | 'coupons'>('details')
   const [showFormBuilder, setShowFormBuilder] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<any>({})
@@ -930,6 +931,21 @@ export default function OrganizerDashboard() {
                     </div>
                   </div>
                 )}
+
+                {tab === 'coupons' && (
+                  <div>
+                    {selected ? (
+                      <CouponManager 
+                        eventId={selected.id} 
+                        organizerId={organizerSecret}
+                      />
+                    ) : (
+                      <Card className="p-8 text-center">
+                        <p className="text-slate-400">Please select an event first</p>
+                      </Card>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </Card>
@@ -996,6 +1012,11 @@ export default function OrganizerDashboard() {
                               style={{ height: `${pct}%`, minHeight: '2px' }}
                               title={`${d.day}: ${d.count}`}
                             />
+                            <div className="flex justify-end mt-3">
+                              <Button variant="ghost" size="sm" onClick={() => removeExtra(idx)} className="text-red-300">
+                                Remove
+                              </Button>
+                            </div>
                             <div className="text-[8px] text-slate-500">{d.day.slice(5)}</div>
                           </div>
                         )
@@ -1174,8 +1195,18 @@ export default function OrganizerDashboard() {
           </Card>
         )}
 
-        {/* Floating Certificates Button */}
-        <div className="fixed left-3 bottom-6 z-50">
+        {/* Floating Certificates & Coupons Buttons */}
+        <div className="fixed left-3 bottom-6 z-50 flex flex-col gap-3">
+          <Button
+            variant={tab === 'coupons' ? 'primary' : 'cosmic'}
+            size="sm"
+            className="rounded-full w-10 h-10 p-0 shadow-lg shadow-black/20"
+            title={tab === 'coupons' ? 'Back to Details' : 'Open Coupons'}
+            aria-label={tab === 'coupons' ? 'Back to Details' : 'Open Coupons'}
+            onClick={() => setTab(tab === 'coupons' ? 'details' : 'coupons')}
+          >
+            <Ticket className="w-5 h-5" />
+          </Button>
           <Button
             variant={tab === 'certificates' ? 'primary' : 'cosmic'}
             size="sm"
@@ -1464,7 +1495,31 @@ export default function OrganizerDashboard() {
 function SimpleFormBuilder({ eventId, organizerSecret, accessToken }: { eventId: string; organizerSecret: string; accessToken: string }) {
   const [loading, setLoading] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
-  const [config, setConfig] = useState<any>({ base: { phone: { label: 'Phone Number' }, college: { label: 'College/Institution' }, ieee: { label: 'IEEE Membership Number' } }, extras: [] })
+
+  const baseDefaults: Record<string, any> = {
+    name: { label: 'Full Name', required: true, enabled: true },
+    email: { label: 'Email Address', required: true, enabled: true },
+    phone: { label: 'Phone Number', required: false, enabled: true },
+    college: { label: 'College/Institution', required: false, enabled: true },
+    ieee: { label: 'IEEE Membership Number', required: false, enabled: false },
+  }
+
+  function normalizeConfig(cfg: any) {
+    const next = { ...(cfg || {}) }
+    const mergedBase: Record<string, any> = {}
+    Object.entries(baseDefaults).forEach(([key, value]) => {
+      mergedBase[key] = { ...value, ...(cfg?.base?.[key] || {}) }
+    })
+    // Preserve any unknown base keys if present
+    Object.keys(cfg?.base || {}).forEach((key) => {
+      if (!mergedBase[key]) mergedBase[key] = cfg.base[key]
+    })
+    next.base = mergedBase
+    next.extras = (cfg?.extras || []).slice(0, 5)
+    return next
+  }
+
+  const [config, setConfig] = useState<any>(normalizeConfig({}))
 
   useEffect(() => {
     async function load() {
@@ -1479,7 +1534,7 @@ function SimpleFormBuilder({ eventId, organizerSecret, accessToken }: { eventId:
         const data = await res.json()
         const cfg = data?.settings?.field_config || {}
         if (!cfg.extras) cfg.extras = []
-        setConfig(cfg)
+        setConfig(normalizeConfig(cfg))
       } catch {}
       setLoading(false)
     }
@@ -1493,6 +1548,13 @@ function SimpleFormBuilder({ eventId, organizerSecret, accessToken }: { eventId:
     setConfig((prev: any) => {
       const arr = [...(prev.extras || [])]
       arr[idx] = { ...(arr[idx] || {}), ...patch }
+      return { ...prev, extras: arr }
+    })
+  }
+  function removeExtra(idx: number) {
+    setConfig((prev: any) => {
+      const arr = [...(prev.extras || [])]
+      arr.splice(idx, 1)
       return { ...prev, extras: arr }
     })
   }
@@ -1528,16 +1590,29 @@ function SimpleFormBuilder({ eventId, organizerSecret, accessToken }: { eventId:
     <div className="space-y-4">
       <SuccessAnimation isVisible={showSuccess} message="Form settings saved successfully!" />
       <div className="grid sm:grid-cols-3 gap-3">
-        {['phone','college','ieee'].map((key) => (
-          <div key={key} className="bg-white/5 border border-white/10 rounded-xl p-3">
-            <div className="text-xs text-slate-400 mb-1">{key.toUpperCase()} Label</div>
-            <Input value={config?.base?.[key]?.label || ''} onChange={(e)=>updateBase(key, { label: e.target.value })} />
-            <div className="flex items-center gap-2 mt-2">
-              <label className="text-xs text-slate-400">Required</label>
-              <input type="checkbox" checked={!!config?.base?.[key]?.required} onChange={(e)=>updateBase(key, { required: e.target.checked })} />
+        {['name','email','phone','college','ieee'].map((key) => {
+          const field = config?.base?.[key] || baseDefaults[key] || {}
+          const locked = key === 'name' || key === 'email'
+          return (
+            <div key={key} className="bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-xs text-slate-400">{key.toUpperCase()} Label</div>
+                {locked && <span className="text-[10px] text-slate-500">Always required</span>}
+              </div>
+              <Input value={field.label || ''} onChange={(e)=>updateBase(key, { label: e.target.value })} />
+              <div className="flex items-center gap-3 mt-2 text-xs text-slate-300">
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={field.enabled !== false} disabled={locked} onChange={(e)=>updateBase(key, { enabled: e.target.checked })} />
+                  <span>Show</span>
+                </label>
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={!!field.required} disabled={locked} onChange={(e)=>updateBase(key, { required: e.target.checked })} />
+                  <span>Required</span>
+                </label>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       <div className="flex items-center justify-between">

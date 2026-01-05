@@ -46,6 +46,36 @@ export default function EventRegistrationPage() {
   const [formSettings, setFormSettings] = useState<any>(null)
   const [extras, setExtras] = useState<string[]>(['', '', '', '', ''])
   const [selectedTier, setSelectedTier] = useState('tier_1')
+  
+  // Coupon state
+  const [couponCode, setCouponCode] = useState('')
+  const [couponData, setCouponData] = useState<any>(null)
+  const [validatingCoupon, setValidatingCoupon] = useState(false)
+
+  function computeTierAmount(): number {
+    if (!event) return 0
+    let amount = event.price_inr
+    if (event.tier_1_enabled && selectedTier === 'tier_1') {
+      amount = event.tier_1_price || event.price_inr
+    } else if (event.tier_2_enabled && selectedTier === 'tier_2') {
+      amount = event.tier_2_price || event.price_inr
+    }
+    return Number(amount) || 0
+  }
+
+  function computeFinalAmount(): number {
+    const base = computeTierAmount()
+    if (!couponData) return base
+    if (couponData.discountType === 'free') return 0
+    if (couponData.discountType === 'percentage') {
+      const discounted = base * (1 - Number(couponData.discountValue || 0) / 100)
+      return Math.max(0, Math.round(discounted))
+    }
+    if (couponData.discountType === 'fixed_amount') {
+      return Math.max(0, base - Number(couponData.discountValue || 0))
+    }
+    return base
+  }
 
   useEffect(() => {
     if (!id) return
@@ -86,6 +116,40 @@ export default function EventRegistrationPage() {
     fetchSettings()
   }, [id])
 
+  async function validateCoupon() {
+    if (!couponCode.trim()) {
+      setCouponData(null)
+      return
+    }
+
+    setValidatingCoupon(true)
+    try {
+      const res = await fetch('/api/organizer/validate-coupon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: couponCode.toUpperCase().trim(),
+          eventId: event.id
+        })
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setCouponData(data)
+        toast.success('Coupon code applied!')
+      } else {
+        const error = await res.json()
+        setCouponData(null)
+        toast.error(error.error || 'Invalid coupon code')
+      }
+    } catch (err) {
+      setCouponData(null)
+      toast.error('Error validating coupon')
+    } finally {
+      setValidatingCoupon(false)
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     
@@ -107,20 +171,86 @@ export default function EventRegistrationPage() {
     setSubmitting(true)
 
     try {
-      // Calculate amount based on selected tier
-      let amount = event.price_inr
-      if (event.tier_1_enabled && selectedTier === 'tier_1') {
-        amount = event.tier_1_price || event.price_inr
-      } else if (event.tier_2_enabled && selectedTier === 'tier_2') {
-        amount = event.tier_2_price || event.price_inr
+      // Calculate base and final amounts with coupon applied
+      const baseAmount = computeTierAmount()
+      const amount = computeFinalAmount()
+      const discountAmount = Math.max(0, baseAmount - amount)
+
+      // Prepare extras array based on settings order
+      const extraValues: string[] = []
+      const defs: any[] = (formSettings?.extras || []).slice(0, 5)
+      for (let i = 0; i < defs.length; i++) {
+        extraValues.push(extras[i] || '')
       }
 
-      // Create order
+      // If free after coupon, bypass Razorpay and issue directly
+      if (amount <= 0) {
+        setGeneratingTicket(true)
+        try {
+          const verifyRes = await fetch('/api/verify-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              metadata: {
+                freeFlow: true,
+                eventId: event.id,
+                name,
+                email,
+                phone,
+                college,
+                ieee,
+                extras: extraValues,
+                selectedTier: selectedTier,
+                baseAmount,
+                discountAmount,
+                tierPrice: amount,
+                amount: 0,
+                couponCode: couponCode.toUpperCase().trim() || null,
+                couponData: couponData || null
+              }
+            })
+          })
+
+          if (verifyRes.ok) {
+            const data = await verifyRes.json()
+            toast.success('🎉 Registration successful! Generating your ticket...', {
+              duration: 2000,
+              style: {
+                background: '#10b981',
+                color: '#fff',
+                fontSize: '16px',
+                padding: '16px'
+              }
+            })
+
+            const ticketId = data.ticketUrl?.split('/ticket/')[1] || data.ticketId
+            setTimeout(() => {
+              if (ticketId) {
+                router.push(`/payment-success?ticketId=${encodeURIComponent(ticketId)}&eventId=${encodeURIComponent(event.id)}`)
+              } else {
+                router.push('/my-tickets')
+              }
+            }, 1200)
+          } else {
+            setGeneratingTicket(false)
+            router.push(`/payment-failed?reason=verification_failed&eventId=${encodeURIComponent(event.id)}`)
+          }
+        } catch (err) {
+          console.error('Free issuance error:', err)
+          setGeneratingTicket(false)
+          router.push(`/payment-failed?reason=payment_failed&eventId=${encodeURIComponent(event.id)}`)
+        } finally {
+          setSubmitting(false)
+        }
+        return
+      }
+
+      // Paid flow: create order then open Razorpay
       const orderRes = await fetch('/api/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: Math.round(Number(amount) * 100),
+          amount: Math.max(0, Math.round(Number(amount) * 100)),
           eventId: event.id,
           name,
           email,
@@ -139,17 +269,9 @@ export default function EventRegistrationPage() {
 
       const orderData = await orderRes.json()
 
-      // Open Razorpay
-      // Prepare extras array based on settings order
-      const extraValues: string[] = []
-      const defs: any[] = (formSettings?.extras || []).slice(0, 5)
-      for (let i = 0; i < defs.length; i++) {
-        extraValues.push(extras[i] || '')
-      }
-
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_Rry2rwBqAIzSSw',
-        amount: Math.round(Number(amount) * 100),
+        amount: Math.max(0, Math.round(Number(amount) * 100)),
         currency: 'INR',
         name: event.title,
         description: `Registration for ${event.title}`,
@@ -175,8 +297,12 @@ export default function EventRegistrationPage() {
                   ieee,
                   extras: extraValues,
                   selectedTier: selectedTier,
-                  tierPrice: amount,
-                  amount: Math.round(Number(amount) * 100)
+                    baseAmount,
+                    discountAmount,
+                    tierPrice: amount,
+                    amount: Math.round(Number(amount) * 100),
+                  couponCode: couponCode.toUpperCase().trim() || null,
+                  couponData: couponData || null
                 }
               })
             })
@@ -248,6 +374,11 @@ export default function EventRegistrationPage() {
       setSubmitting(false)
     }
   }
+
+  const baseConfig = formSettings?.base || {}
+  const showPhone = baseConfig?.phone?.enabled !== false
+  const showCollege = baseConfig?.college?.enabled !== false
+  const showIeee = baseConfig?.ieee?.enabled !== false
 
   if (loading) {
     return <LoadingAnimation message="Loading Event Details" fullScreen />
@@ -476,7 +607,7 @@ export default function EventRegistrationPage() {
               )}
 
               <div>
-                <label className="text-sm text-slate-300 mb-1 block">Full Name *</label>
+                <label className="text-sm text-slate-300 mb-1 block">{baseConfig?.name?.label || 'Full Name'} *</label>
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -487,7 +618,7 @@ export default function EventRegistrationPage() {
               </div>
 
               <div>
-                <label className="text-sm text-slate-300 mb-1 block">Email Address *</label>
+                <label className="text-sm text-slate-300 mb-1 block">{baseConfig?.email?.label || 'Email Address'} *</label>
                 <Input
                   type="email"
                   value={email}
@@ -498,35 +629,44 @@ export default function EventRegistrationPage() {
                 />
               </div>
 
-              <div>
-                <label className="text-sm text-slate-300 mb-1 block">{formSettings?.base?.phone?.label || 'Phone Number'}</label>
-                <Input
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="9876543210"
-                  disabled={submitting}
-                />
-              </div>
+              {showPhone && (
+                <div>
+                  <label className="text-sm text-slate-300 mb-1 block">{baseConfig?.phone?.label || 'Phone Number'}</label>
+                  <Input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="9876543210"
+                    disabled={submitting}
+                    required={!!baseConfig?.phone?.required}
+                  />
+                </div>
+              )}
 
-              <div>
-                <label className="text-sm text-slate-300 mb-1 block">{formSettings?.base?.college?.label || 'College/Institution'}</label>
-                <Input
-                  value={college}
-                  onChange={(e) => setCollege(e.target.value)}
-                  placeholder="Your college name"
-                  disabled={submitting}
-                />
-              </div>
+              {showCollege && (
+                <div>
+                  <label className="text-sm text-slate-300 mb-1 block">{baseConfig?.college?.label || 'College/Institution'}</label>
+                  <Input
+                    value={college}
+                    onChange={(e) => setCollege(e.target.value)}
+                    placeholder="Your college name"
+                    disabled={submitting}
+                    required={!!baseConfig?.college?.required}
+                  />
+                </div>
+              )}
 
-              <div>
-                <label className="text-sm text-slate-300 mb-1 block">{formSettings?.base?.ieee?.label || 'IEEE Membership Number'}</label>
-                <Input
-                  value={ieee}
-                  onChange={(e) => setIeee(e.target.value)}
-                  placeholder="Optional"
-                  disabled={submitting}
-                />
-              </div>
+              {showIeee && (
+                <div>
+                  <label className="text-sm text-slate-300 mb-1 block">{baseConfig?.ieee?.label || 'IEEE Membership Number'}</label>
+                  <Input
+                    value={ieee}
+                    onChange={(e) => setIeee(e.target.value)}
+                    placeholder="Optional"
+                    disabled={submitting}
+                    required={!!baseConfig?.ieee?.required}
+                  />
+                </div>
+              )}
 
               {/* Extra fields (up to 5) */}
               {(formSettings?.extras || []).slice(0,5).map((f: any, idx: number) => (
@@ -573,6 +713,38 @@ export default function EventRegistrationPage() {
                 </div>
               ))}
 
+              {/* Coupon Code Section */}
+              <div className="p-4 sm:p-5 rounded-lg bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 space-y-3">
+                <h3 className="text-sm sm:text-base font-semibold text-white">Have a Coupon Code?</h3>
+                <div className="flex gap-2">
+                  <Input
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="Enter coupon code (optional)"
+                    disabled={submitting || validatingCoupon}
+                    maxLength={20}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="cosmic"
+                    onClick={validateCoupon}
+                    disabled={submitting || validatingCoupon || !couponCode.trim()}
+                    size="sm"
+                  >
+                    {validatingCoupon ? 'Checking...' : 'Apply'}
+                  </Button>
+                </div>
+                {couponData && (
+                  <div className="p-3 bg-green-500/20 border border-green-500/30 rounded-lg">
+                    <p className="text-xs sm:text-sm text-green-300">
+                      ✓ Coupon applied: {couponData.discountType === 'percentage' ? `${couponData.discountValue}% off` : `₹${couponData.discountValue} off`}
+                      {couponData.description && ` - ${couponData.description}`}
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div className="pt-3 sm:pt-4">
                 <Button
                   type="submit"
@@ -581,16 +753,13 @@ export default function EventRegistrationPage() {
                   isLoading={submitting}
                 >
                   {(() => {
-                    const amount = (() => {
-                      let amt = event.price_inr
-                      if (event.tier_1_enabled && selectedTier === 'tier_1') {
-                        amt = event.tier_1_price || event.price_inr
-                      } else if (event.tier_2_enabled && selectedTier === 'tier_2') {
-                        amt = event.tier_2_price || event.price_inr
-                      }
-                      return amt
-                    })()
-                    return `Pay ₹${amount} & Register`
+                    const base = computeTierAmount()
+                    const final = computeFinalAmount()
+                    const showDiscount = couponData && final < base
+                    if (final <= 0) return 'Complete Registration (Free)'
+                    return showDiscount
+                      ? `Pay ₹${final} (was ₹${base})`
+                      : `Pay ₹${base} & Register`
                   })()}
                 </Button>
               </div>

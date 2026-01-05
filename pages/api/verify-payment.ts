@@ -81,14 +81,22 @@ function getMailer() {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end()
   const { razorpay_payment_id, razorpay_order_id, razorpay_signature, metadata } = req.body
-  const paymentId = String(razorpay_payment_id || '').trim()
+  const isFreeFlow = metadata?.freeFlow === true
+  const baseAmount = Number(metadata?.baseAmount ?? 0)
+  const discountAmount = Number(metadata?.discountAmount ?? Math.max(0, baseAmount - Number(metadata?.tierPrice ?? 0)))
+  const couponId = metadata?.couponData?.couponId || null
+  const couponCode = (metadata?.couponCode || metadata?.couponData?.code || '').toString().trim() || null
+  const paymentId = isFreeFlow ? (metadata?.paymentId || `free_${Date.now()}`) : String(razorpay_payment_id || '').trim()
   if (!paymentId) return res.status(400).json({ error: 'missing_payment_id' })
-  // verify signature using HMAC SHA256
-  const secret = process.env.RAZORPAY_KEY_SECRET || ''
-  const generated_signature = crypto.createHmac('sha256', secret).update(`${razorpay_order_id}|${razorpay_payment_id}`).digest('hex')
-  if (generated_signature !== razorpay_signature) {
-    logWarn('invalid razorpay signature', { generated_signature, razorpay_signature })
-    return res.status(400).json({ error: 'invalid_signature' })
+
+  // verify signature using HMAC SHA256 unless free flow is requested
+  if (!isFreeFlow) {
+    const secret = process.env.RAZORPAY_KEY_SECRET || ''
+    const generated_signature = crypto.createHmac('sha256', secret).update(`${razorpay_order_id}|${razorpay_payment_id}`).digest('hex')
+    if (generated_signature !== razorpay_signature) {
+      logWarn('invalid razorpay signature', { generated_signature, razorpay_signature })
+      return res.status(400).json({ error: 'invalid_signature' })
+    }
   }
 
   const name = (metadata?.name || '').trim()
@@ -138,10 +146,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       extra5: extras[4] || null,
       event_id: metadata?.eventId || null,
       payment_id: paymentId,
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-      amount_paid: metadata?.amount || null,
+      razorpay_order_id: isFreeFlow ? null : razorpay_order_id,
+      razorpay_payment_id: isFreeFlow ? null : razorpay_payment_id,
+      razorpay_signature: isFreeFlow ? null : razorpay_signature,
+      amount_paid: metadata?.amount ?? (isFreeFlow ? 0 : null),
       tier_selected: selectedTier,
       tier_price: tierPrice,
       status: 'pending',
@@ -166,6 +174,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     insertedTicket = updatedTicket
     // send email with ticket link and attach PDF
     const ticketUrl = `${baseUrl}/ticket/${ticketId}`
+
+    // Record coupon redemption and increment usage if applicable
+    if (couponId) {
+      try {
+        const { data: couponRow, error: couponLookupError } = await supabase
+          .from('coupons')
+          .select('id, used_count, max_redemptions, is_active')
+          .eq('id', couponId)
+          .maybeSingle()
+
+        if (!couponLookupError && couponRow && couponRow.is_active !== false && (couponRow.max_redemptions === null || couponRow.used_count < couponRow.max_redemptions)) {
+          const { error: redemptionError } = await supabase
+            .from('coupon_redemptions')
+            .insert([{ coupon_id: couponId, ticket_id: ticketId, discount_amount: discountAmount }])
+            .select()
+            .single()
+
+          if (redemptionError) {
+            if (redemptionError.message?.includes('duplicate')) {
+              logWarn('duplicate coupon redemption skipped', { couponId, couponCode, ticketId })
+            } else {
+              logError('coupon redemption insert failed', { couponId, couponCode, ticketId, error: redemptionError })
+            }
+          }
+
+          const { error: usedCountError } = await supabase
+            .from('coupons')
+            .update({ used_count: (couponRow.used_count || 0) + 1 })
+            .eq('id', couponId)
+
+          if (usedCountError) {
+            logError('coupon used_count update failed', { couponId, couponCode, ticketId, error: usedCountError })
+          }
+        } else {
+          logWarn('coupon not eligible at issuance', { couponId, couponCode, ticketId, couponLookupError })
+        }
+      } catch (couponErr) {
+        logError('coupon redemption handling failed', { couponId, couponCode, ticketId, error: (couponErr as Error)?.message })
+      }
+    }
 
     // gather event info and optional template
     const event = await getEventById(insertedTicket?.event_id)
