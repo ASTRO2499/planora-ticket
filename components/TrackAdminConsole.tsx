@@ -3,6 +3,7 @@ import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { toast } from 'react-hot-toast'
+import TicketGenerationAnimation from './TicketGenerationAnimation'
 
 export function TrackAdminConsole({ eventId, organizerSecret, accessToken }: { eventId: string; organizerSecret: string; accessToken: string }) {
   const [subEvents, setSubEvents] = useState<any[]>([])
@@ -11,6 +12,9 @@ export function TrackAdminConsole({ eventId, organizerSecret, accessToken }: { e
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [exportingCSV, setExportingCSV] = useState(false)
+  const [generatingTickets, setGeneratingTickets] = useState(false)
+  const [generationStage, setGenerationStage] = useState<'preparing' | 'generating' | 'sending' | 'complete'>('preparing')
+  const [generationProgress, setGenerationProgress] = useState(0)
 
   const loadSubEvents = useCallback(async () => {
     setLoading(true)
@@ -92,6 +96,71 @@ export function TrackAdminConsole({ eventId, organizerSecret, accessToken }: { e
     }
   }
 
+  async function generateAndSendTickets() {
+    if (!selectedSubEvent) return
+    
+    if (registrations.length === 0) {
+      toast.error('No registrations to send tickets to')
+      return
+    }
+
+    const confirmed = window.confirm(
+      `This will generate and send ticket PDFs to ${registrations.length} participant(s) via email. Continue?`
+    )
+    if (!confirmed) return
+
+    setGeneratingTickets(true)
+    setGenerationStage('preparing')
+    setGenerationProgress(0)
+
+    try {
+      // Simulate preparing stage
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      setGenerationStage('generating')
+      
+      // Simulate generating stage
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      setGenerationStage('sending')
+      
+      const res = await fetch('/api/admin/send-tickets-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId,
+          subEventId: selectedSubEvent.id
+        })
+      })
+
+      const data = await res.json()
+
+      if (res.ok) {
+        // Animate progress as emails are sent
+        const increment = 100 / data.totalTickets
+        for (let i = 0; i <= data.totalTickets; i++) {
+          setGenerationProgress(i)
+          await new Promise(resolve => setTimeout(resolve, 50))
+        }
+
+        // Show completion stage
+        setGenerationStage('complete')
+        await new Promise(resolve => setTimeout(resolve, 1500))
+
+        toast.success(`Sent ${data.successCount}/${data.totalTickets} tickets successfully!`)
+        if (data.failureCount > 0) {
+          toast.error(`Failed to send ${data.failureCount} tickets`)
+        }
+      } else {
+        toast.error(data.error || 'Failed to send tickets')
+      }
+    } catch (error) {
+      toast.error('Network error: ' + (error instanceof Error ? error.message : String(error)))
+    } finally {
+      setGeneratingTickets(false)
+      setGenerationProgress(0)
+      setGenerationStage('preparing')
+    }
+  }
+
   const filteredRegistrations = registrations.filter(r => {
     if (!searchQuery.trim()) return true
     const q = searchQuery.toLowerCase()
@@ -105,6 +174,12 @@ export function TrackAdminConsole({ eventId, organizerSecret, accessToken }: { e
 
   return (
     <div className="space-y-6">
+      <TicketGenerationAnimation 
+        isVisible={generatingTickets}
+        stage={generationStage}
+        totalCount={registrations.length}
+        currentCount={generationProgress}
+      />
       <div className="flex gap-2 flex-wrap">
         {subEvents.length > 6 ? (
           <select
@@ -163,6 +238,7 @@ export function TrackAdminConsole({ eventId, organizerSecret, accessToken }: { e
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1"
             />
+            <Button onClick={generateAndSendTickets} isLoading={generatingTickets} variant="primary">Generate</Button>
             <Button onClick={exportCSV} isLoading={exportingCSV}>Export CSV</Button>
           </div>
 

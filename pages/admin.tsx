@@ -6,6 +6,7 @@ import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
 import { ShieldCheck, LogOut, Search, CheckCircle, XCircle, Trash2, Mail, Download, TrendingUp, Users, DollarSign, Edit2, X, Radio, Home, LayoutDashboard } from 'lucide-react'
 import Link from 'next/link'
+import TicketGenerationAnimation from '../components/TicketGenerationAnimation'
 
 type AuthState = 'unknown' | 'authenticated' | 'unauthenticated'
 
@@ -27,6 +28,9 @@ export default function AdminPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<any>({})
   const [editLoading, setEditLoading] = useState(false)
+  const [generatingTickets, setGeneratingTickets] = useState(false)
+  const [generationStage, setGenerationStage] = useState<'preparing' | 'generating' | 'sending' | 'complete'>('preparing')
+  const [generationProgress, setGenerationProgress] = useState(0)
   const isAuthed = authState === 'authenticated'
 
   const search = useCallback(async (e?: React.FormEvent<HTMLFormElement>) => {
@@ -246,6 +250,99 @@ export default function AdminPage() {
     }
   }
 
+  async function generateAndSendAllTickets() {
+    if (!isAuthed) return
+    if (!eventFilter || eventFilter === 'ALL') return toast.error('Select an event first')
+    
+    // If no tickets in state, try to fetch them
+    let ticketsToSend = tickets
+    if (ticketsToSend.length === 0) {
+      try {
+        console.log('[GENERATE] Event filter value:', eventFilter)
+        console.log('[GENERATE] Event filter type:', typeof eventFilter)
+        
+        // Also fetch ALL tickets to see what event_ids exist
+        const allRes = await fetch(`/api/admin/tickets?limit=1000`)
+        const allTickets = await allRes.json()
+        const uniqueEventIds = [...new Set(allTickets.map((t: any) => t.event_id))]
+        console.log('[GENERATE] All unique event_ids in database:', uniqueEventIds)
+        
+        const res = await fetch(`/api/admin/tickets?eventId=${encodeURIComponent(eventFilter)}`)
+        if (res.ok) {
+          const data = await res.json()
+          ticketsToSend = data || []
+          console.log('[GENERATE] Fetched tickets for event:', ticketsToSend.length)
+        } else {
+          console.error('[GENERATE] Failed to fetch tickets:', res.status, res.statusText)
+        }
+      } catch (err) {
+        console.error('[GENERATE] Error fetching tickets:', err)
+      }
+    }
+    
+    if (ticketsToSend.length === 0) {
+      toast.error(`No tickets found for event "${eventFilter}". Please create tickets first or select a different event.`)
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Generate and send ticket PDFs to ${ticketsToSend.length} attendee(s)? Continue?`
+    )
+    if (!confirmed) return
+
+    setGeneratingTickets(true)
+    setGenerationStage('preparing')
+    setGenerationProgress(0)
+
+    try {
+      // Simulate preparing stage
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      setGenerationStage('generating')
+      
+      // Simulate generating stage
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      setGenerationStage('sending')
+      
+      const body = JSON.stringify({
+        eventId: eventFilter
+      })
+      console.log('[ADMIN GENERATE] Sending request to send-tickets-bulk:', body)
+      
+      const res = await fetch('/api/admin/send-tickets-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body
+      })
+
+      const data = await res.json()
+
+      if (res.ok) {
+        // Animate progress as emails are sent
+        for (let i = 0; i <= data.totalTickets; i++) {
+          setGenerationProgress(i)
+          await new Promise(resolve => setTimeout(resolve, 50))
+        }
+
+        // Show completion stage
+        setGenerationStage('complete')
+        await new Promise(resolve => setTimeout(resolve, 1500))
+
+        toast.success(`Sent ${data.successCount}/${data.totalTickets} tickets successfully!`)
+        if (data.failureCount > 0) {
+          toast.error(`Failed to send ${data.failureCount} tickets`)
+        }
+      } else {
+        toast.error(data.error || 'Failed to send tickets')
+      }
+    } catch (error) {
+      toast.error('Network error: ' + (error instanceof Error ? error.message : String(error)))
+    } finally {
+      setGeneratingTickets(false)
+      setGenerationProgress(0)
+      setGenerationStage('preparing')
+    }
+  }
+
   function cancelEdit() {
     setEditingId(null)
     setEditForm({})
@@ -280,6 +377,12 @@ export default function AdminPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8">
+      <TicketGenerationAnimation 
+        isVisible={generatingTickets}
+        stage={generationStage}
+        totalCount={tickets.length}
+        currentCount={generationProgress}
+      />
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-display font-bold text-white flex items-center gap-3">
           <ShieldCheck className="text-primary" /> Admin Portal
@@ -546,6 +649,14 @@ export default function AdminPage() {
               </div>
               <Button isLoading={loading} variant="primary" className="w-32">
                 <Search className="w-4 h-4 mr-2" /> Search
+              </Button>
+              <Button 
+                onClick={generateAndSendAllTickets}
+                isLoading={generatingTickets}
+                variant="primary" 
+                className="w-32"
+              >
+                Generate
               </Button>
               <Button onClick={exportCSV} variant="ghost" type="button" className="w-32">
                 <Download className="w-4 h-4 mr-2" /> Export

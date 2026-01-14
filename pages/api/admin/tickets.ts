@@ -30,8 +30,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const eventId = (req.query.eventId as string | undefined)?.trim()
     const statusFilter = (req.query.status as string | undefined)?.trim()?.toLowerCase()
     const limit = Math.min(Number(req.query.limit) || 50, 200)
+    
+    console.log('[ADMIN TICKETS DEBUG]', { eventId, q, statusFilter, limit })
+    
     let query = supabase.from('tickets').select('*').order('created_at', { ascending: false }).limit(limit)
     if (eventId && eventId !== 'ALL') {
+      console.log('[ADMIN TICKETS] Filtering by event_id:', eventId)
       query = query.eq('event_id', eventId)
     }
     if (statusFilter === 'checked') {
@@ -44,6 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       query = query.or(`id.ilike.%${q}%,email.ilike.%${q}%`, { foreignTable: 'tickets' })
     }
     const { data, error } = await query
+    console.log('[ADMIN TICKETS RESULT]', { count: data?.length || 0, error: error?.message })
     if (error) return res.status(500).json({ error: error.message })
     return res.json(data)
   }

@@ -9,6 +9,7 @@ import { toast } from 'react-hot-toast'
 import supabase from '../lib/supabaseClient'
 import { Award, Edit2, Ticket } from 'lucide-react'
 import SuccessAnimation from '../components/SuccessAnimation'
+import TicketGenerationAnimation from '../components/TicketGenerationAnimation'
 import CouponManager from '../components/CouponManager'
 
 const FORM_BASE_DEFAULTS: Record<string, any> = {
@@ -54,6 +55,9 @@ export default function OrganizerDashboard() {
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null)
   const [trackRegistrations, setTrackRegistrations] = useState<any[]>([])
   const [trackAdminLoading, setTrackAdminLoading] = useState(false)
+  const [generatingTickets, setGeneratingTickets] = useState(false)
+  const [generationStage, setGenerationStage] = useState<'preparing' | 'generating' | 'sending' | 'complete'>('preparing')
+  const [generationProgress, setGenerationProgress] = useState(0)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -280,6 +284,77 @@ export default function OrganizerDashboard() {
       }
     } catch {
       toast.error('Network error')
+    }
+  }
+
+  async function generateAndSendEventTickets() {
+    if (!selected) return
+    
+    console.log('[ORG GENERATE] Selected event:', selected)
+    console.log('[ORG GENERATE] Event ID:', selected?.id)
+    console.log('[ORG GENERATE] Tickets in state:', tickets.length)
+    
+    if (tickets.length === 0) {
+      toast.error('No attendees to send tickets to')
+      return
+    }
+
+    const confirmed = window.confirm(
+      `This will generate and send ticket PDFs to ${tickets.length} attendee(s) via email. Continue?`
+    )
+    if (!confirmed) return
+
+    setGeneratingTickets(true)
+    setGenerationStage('preparing')
+    setGenerationProgress(0)
+
+    try {
+      // Simulate preparing stage
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      setGenerationStage('generating')
+      
+      // Simulate generating stage
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      setGenerationStage('sending')
+      
+      const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+      if (organizerSecret) headers['x-organizer-secret'] = organizerSecret
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+
+      const res = await fetch('/api/organizer/send-event-tickets', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          eventId: selected.id
+        })
+      })
+
+      const data = await res.json()
+
+      if (res.ok) {
+        // Animate progress as emails are sent
+        for (let i = 0; i <= data.totalTickets; i++) {
+          setGenerationProgress(i)
+          await new Promise(resolve => setTimeout(resolve, 50))
+        }
+
+        // Show completion stage
+        setGenerationStage('complete')
+        await new Promise(resolve => setTimeout(resolve, 1500))
+
+        toast.success(`Sent ${data.successCount}/${data.totalTickets} tickets successfully!`)
+        if (data.failureCount > 0) {
+          toast.error(`Failed to send ${data.failureCount} tickets`)
+        }
+      } else {
+        toast.error(data.error || 'Failed to send tickets')
+      }
+    } catch (error) {
+      toast.error('Network error: ' + (error instanceof Error ? error.message : String(error)))
+    } finally {
+      setGeneratingTickets(false)
+      setGenerationProgress(0)
+      setGenerationStage('preparing')
     }
   }
 
@@ -727,7 +802,18 @@ export default function OrganizerDashboard() {
   return (
     <div className="min-h-screen p-6">
       <Head><title>Organizer Dashboard</title></Head>
-      <SuccessAnimation isVisible={showSuccessAnimation} message="Form settings saved successfully!" />
+      <TicketGenerationAnimation 
+        isVisible={generatingTickets}
+        stage={generationStage}
+        totalCount={tickets.length}
+        currentCount={generationProgress}
+      />
+      <TicketGenerationAnimation 
+        isVisible={generatingTickets}
+        stage={generationStage}
+        totalCount={tickets.length}
+        currentCount={generationProgress}
+      />
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-white">Manage Events</h1>
@@ -1048,6 +1134,13 @@ export default function OrganizerDashboard() {
                   <option value="checked" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>Checked-in</option>
                   <option value="remaining" style={{backgroundColor: '#1e293b', color: '#f1f5f9'}}>Remaining</option>
                 </select>
+                <Button 
+                  variant="primary" 
+                  isLoading={generatingTickets}
+                  onClick={generateAndSendEventTickets}
+                >
+                  Generate
+                </Button>
                 <Button
                   variant="cosmic"
                   onClick={() => {
