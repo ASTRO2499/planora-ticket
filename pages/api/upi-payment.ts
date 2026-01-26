@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { createClient } from '@supabase/supabase-js'
-import { uploadToGoogleDrive, generateFileName, getExtensionFromMimeType } from '../../lib/googleDriveUpload'
 
 const supabase = createClient(process.env.SUPABASE_URL || '', process.env.SUPABASE_SERVICE_KEY || '')
 
@@ -38,7 +37,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     let screenshotUrl = null
-    let googleDriveUrl = null
 
     // Upload screenshot if provided
     if (screenshotBase64) {
@@ -72,21 +70,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             screenshotUrl = data?.signedUrl || null
             console.log('[UPI PAYMENT] Screenshot uploaded to Supabase:', screenshotUrl)
           }
-        }
-
-        // Upload to Google Drive
-        try {
-          const extension = getExtensionFromMimeType(mimeType)
-          const googleDriveFileName = generateFileName(name, college || 'Unknown', extension)
-          
-          console.log('[UPI PAYMENT] Uploading to Google Drive:', { fileName: googleDriveFileName, size: buffer.length })
-          
-          const { webViewLink } = await uploadToGoogleDrive(buffer, googleDriveFileName, mimeType)
-          googleDriveUrl = webViewLink
-          
-          console.log('[UPI PAYMENT] Screenshot uploaded to Google Drive:', googleDriveUrl)
-        } catch (driveErr) {
-          console.error('[UPI PAYMENT] Google Drive upload failed:', driveErr)
         }
       } catch (uploadErr) {
         console.error('[UPI PAYMENT] Error processing screenshot:', uploadErr)
@@ -144,7 +127,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         upi_id,
         transaction_id: transaction_id || null,
         screenshot_url: screenshotUrl,
-        google_drive_url: googleDriveUrl,
         status: 'pending'
       })
       .select()
@@ -157,8 +139,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('[UPI PAYMENT] Payment record created:', {
       paymentId: upiPayment.id,
-      supabaseUrl: !!screenshotUrl,
-      googleDriveUrl: !!googleDriveUrl
+      supabaseUrl: !!screenshotUrl
     })
 
     return res.status(200).json({
@@ -166,8 +147,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       message: 'Payment screenshot submitted successfully. Please wait for organizer confirmation.',
       payment_id: upiPayment.id,
       status: 'pending',
-      supabaseUrl: screenshotUrl,
-      googleDriveUrl: googleDriveUrl
+      supabaseUrl: screenshotUrl
     })
   } catch (err) {
     console.error('[UPI PAYMENT] UPI payment submission error:', err)
