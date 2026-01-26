@@ -17,6 +17,10 @@ export default function PricingTiers() {
   const [tier2Name, setTier2Name] = useState('Tier 2');
   const [tier2Price, setTier2Price] = useState('');
   
+  const [tier3Enabled, setTier3Enabled] = useState(false);
+  const [tier3Name, setTier3Name] = useState('Tier 3');
+  const [tier3Price, setTier3Price] = useState('');
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -72,6 +76,10 @@ export default function PricingTiers() {
       setTier2Enabled(Boolean(event.tier_2_enabled));
       setTier2Name(event.tier_2_name || 'Tier 2');
       setTier2Price(event.tier_2_price != null ? String(event.tier_2_price) : '');
+      
+      setTier3Enabled(Boolean(event.tier_3_enabled));
+      setTier3Name(event.tier_3_name || 'Tier 3');
+      setTier3Price(event.tier_3_price != null ? String(event.tier_3_price) : '');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load event pricing configuration';
       setError(message);
@@ -92,9 +100,12 @@ export default function PricingTiers() {
       if (tier2Enabled && (!tier2Price || isNaN(Number(tier2Price)))) {
         throw new Error('Tier 2 price is required and must be a valid number');
       }
+      if (tier3Enabled && (!tier3Price || isNaN(Number(tier3Price)))) {
+        throw new Error('Tier 3 price is required and must be a valid number');
+      }
       
       // At least one tier must be enabled
-      if (!tier1Enabled && !tier2Enabled) {
+      if (!tier1Enabled && !tier2Enabled && !tier3Enabled) {
         throw new Error('At least one pricing tier must be enabled');
       }
 
@@ -114,6 +125,9 @@ export default function PricingTiers() {
           tier2Enabled,
           tier2Name,
           tier2Price: tier2Enabled ? Number(tier2Price) : null,
+          tier3Enabled,
+          tier3Name,
+          tier3Price: tier3Enabled ? Number(tier3Price) : null,
         }),
       });
 
@@ -241,14 +255,55 @@ export default function PricingTiers() {
             )}
           </Card>
 
+          {/* Tier 3 */}
+          <Card className="p-6 bg-white/5 border-white/10">
+            <div className="flex items-center gap-3 mb-4">
+              <input
+                type="checkbox"
+                id="tier3Enabled"
+                checked={tier3Enabled}
+                onChange={(e) => setTier3Enabled(e.target.checked)}
+                className="w-5 h-5 rounded border-white/20 bg-white/5 text-violet-500"
+              />
+              <label htmlFor="tier3Enabled" className="text-lg font-semibold text-white cursor-pointer">
+                Enable Pricing Tier 3
+              </label>
+            </div>
+
+            {tier3Enabled && (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm text-slate-300 mb-1 block">Tier Name</label>
+                  <Input
+                    value={tier3Name}
+                    onChange={(e) => setTier3Name(e.target.value)}
+                    placeholder="e.g., Gold, Elite, Platinum"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-slate-300 mb-1 block">Price (₹)</label>
+                  <Input
+                    type="number"
+                    value={tier3Price}
+                    onChange={(e) => setTier3Price(e.target.value)}
+                    placeholder="0"
+                    min="0"
+                  />
+                </div>
+              </div>
+            )}
+          </Card>
+
           {/* Summary */}
-          {(tier1Enabled || tier2Enabled) && (
+          {(tier1Enabled || tier2Enabled || tier3Enabled) && (
             <Card className="p-4 bg-violet-500/10 border-violet-500/30">
               <p className="text-sm text-slate-300 mb-2">
                 <strong>Registration Preview:</strong> Users will see
                 {tier1Enabled && <span> {tier1Name} (₹{tier1Price})</span>}
-                {tier1Enabled && tier2Enabled && <span> or </span>}
+                {tier1Enabled && (tier2Enabled || tier3Enabled) && <span> or </span>}
                 {tier2Enabled && <span> {tier2Name} (₹{tier2Price})</span>}
+                {tier2Enabled && tier3Enabled && <span> or </span>}
+                {tier3Enabled && <span> {tier3Name} (₹{tier3Price})</span>}
               </p>
             </Card>
           )}

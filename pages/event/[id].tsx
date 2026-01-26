@@ -63,6 +63,8 @@ export default function EventRegistrationPage() {
       amount = event.tier_1_price || event.price_inr
     } else if (event.tier_2_enabled && selectedTier === 'tier_2') {
       amount = event.tier_2_price || event.price_inr
+    } else if (event.tier_3_enabled && selectedTier === 'tier_3') {
+      amount = event.tier_3_price || event.price_inr
     }
     return Number(amount) || 0
   }
@@ -636,6 +638,27 @@ export default function EventRegistrationPage() {
                         <div className="flex-1 min-w-0">
                           <div className="text-sm sm:text-base font-semibold text-white">{event.tier_2_name || 'Option 2'}</div>
                           <div className="text-xs sm:text-sm text-slate-400">₹{event.tier_2_price || 0}</div>
+                        </div>
+                      </label>
+                    )}
+                    {event.tier_3_enabled && (
+                      <label className="flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all"
+                        style={{
+                          borderColor: selectedTier === 'tier_3' ? '#667eea' : '#374151',
+                          backgroundColor: selectedTier === 'tier_3' ? 'rgba(102, 126, 234, 0.1)' : 'transparent'
+                        }}>
+                        <input
+                          type="radio"
+                          name="tier"
+                          value="tier_3"
+                          checked={selectedTier === 'tier_3'}
+                          onChange={(e) => setSelectedTier(e.target.value)}
+                          className="w-4 h-4"
+                          disabled={submitting}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm sm:text-base font-semibold text-white">{event.tier_3_name || 'Option 3'}</div>
+                          <div className="text-xs sm:text-sm text-slate-400">₹{event.tier_3_price || 0}</div>
                         </div>
                       </label>
                     )}
