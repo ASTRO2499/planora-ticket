@@ -793,10 +793,10 @@ export default function OrganizerDashboard() {
   async function approveUpiPayment(paymentId: string) {
     if (!selected?.id) return
     try {
-      // Show loading page while processing
-      router.push(`/upi-approval-loading?paymentId=${paymentId}&ticketId=pending`)
+      // Show loading toast
+      const loadingToastId = toast.loading('Processing payment approval...\nGenerating QR • Creating PDF • Sending email')
       
-      // Make the API call in background
+      // Make the API call
       const res = await fetch(`/api/organizer/upi-payments?eventId=${encodeURIComponent(selected.id)}`, {
         method: 'POST',
         headers: {
@@ -810,20 +810,23 @@ export default function OrganizerDashboard() {
         })
       })
       const data = await res.json()
+      
       if (res.ok) {
-        // Redirect to success page with ticket ID - loading page will also redirect
+        // Success - dismiss loading toast and show success
+        toast.dismiss(loadingToastId)
+        toast.success('✅ Payment approved! QR code and PDF sent via email')
+        
+        // Refresh payments list to update UI
         setTimeout(() => {
-          router.push(`/upi-verification-success?ticketId=${data.ticketId}`)
-          // Refresh payments list
           fetchUpiPayments()
-        }, 10000) // Wait for loading animation to complete
+        }, 1000)
       } else {
+        toast.dismiss(loadingToastId)
         toast.error(data.error || 'Failed to approve payment')
-        router.back() // Go back if there's an error
       }
-    } catch {
-      toast.error('Network error')
-      router.back()
+    } catch (error) {
+      toast.error('Network error during approval')
+      console.error('Approval error:', error)
     }
   }
 

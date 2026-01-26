@@ -4,19 +4,87 @@ import { Readable } from 'stream'
 // Google Drive Folder ID where screenshots will be uploaded
 const DRIVE_FOLDER_ID = '1MCaMBRZ_ghp0caBcg7TvFM_pOoDwNbaN'
 
+/**
+ * Safely parse Google Drive credentials from environment variable
+ */
+function parseGoogleDriveCredentials(credentialsString: string | undefined): any {
+  if (!credentialsString) {
+    throw new Error('GOOGLE_DRIVE_CREDENTIALS environment variable not set')
+  }
+
+  // Log input for debugging
+  console.log('[GOOGLE DRIVE] Input credentials type:', typeof credentialsString)
+  console.log('[GOOGLE DRIVE] Input credentials length:', credentialsString.length)
+  console.log('[GOOGLE DRIVE] First 100 chars:', credentialsString.substring(0, 100))
+
+  if (typeof credentialsString !== 'string') {
+    console.log('[GOOGLE DRIVE] Credentials already parsed as object')
+    return credentialsString
+  }
+
+  const trimmed = credentialsString.trim()
+  
+  // Try to parse as JSON
+  try {
+    const parsed = JSON.parse(trimmed)
+    console.log('[GOOGLE DRIVE] Credentials parsed successfully')
+    console.log('[GOOGLE DRIVE] Parsed object keys:', Object.keys(parsed))
+    return parsed
+  } catch (parseError) {
+    console.error('[GOOGLE DRIVE] Initial JSON parse failed:', parseError)
+    
+    // Try alternative: the string might have extra escaping
+    try {
+      // If it starts with escaped quote, try to unescape
+      let unescaped = trimmed
+      if (unescaped.startsWith('\\"')) {
+        unescaped = unescaped.slice(1, -1)
+        console.log('[GOOGLE DRIVE] Removing outer escaped quotes')
+      }
+      
+      const parsed = JSON.parse(unescaped)
+      console.log('[GOOGLE DRIVE] Credentials parsed successfully after unescaping')
+      console.log('[GOOGLE DRIVE] Parsed object keys:', Object.keys(parsed))
+      return parsed
+    } catch (secondError) {
+      console.error('[GOOGLE DRIVE] Second parse attempt failed:', secondError)
+      throw new Error(`Failed to parse GOOGLE_DRIVE_CREDENTIALS: ${parseError instanceof Error ? parseError.message : String(parseError)}`)
+    }
+  }
+}
+
 // Initialize Google Drive API
 function getGoogleDriveClient() {
   try {
-    const credentials = process.env.GOOGLE_DRIVE_CREDENTIALS
-    if (!credentials) {
-      throw new Error('GOOGLE_DRIVE_CREDENTIALS environment variable not set')
+    const credentialsString = process.env.GOOGLE_DRIVE_CREDENTIALS
+    
+    console.log('[GOOGLE DRIVE] Initializing client...')
+    
+    const credentialsObj = parseGoogleDriveCredentials(credentialsString)
+
+    // Verify required fields
+    if (!credentialsObj.type || !credentialsObj.project_id || !credentialsObj.private_key) {
+      console.error('[GOOGLE DRIVE] Missing required credential fields:', {
+        hasType: !!credentialsObj.type,
+        hasProjectId: !!credentialsObj.project_id,
+        hasPrivateKey: !!credentialsObj.private_key
+      })
+      throw new Error('Invalid credentials: missing required fields (type, project_id, or private_key)')
     }
 
+    console.log('[GOOGLE DRIVE] Credentials validated:', {
+      type: credentialsObj.type,
+      projectId: credentialsObj.project_id,
+      clientEmail: credentialsObj.client_email,
+      privateKeyLength: credentialsObj.private_key.length
+    })
+
     const auth = new google.auth.GoogleAuth({
-      credentials: typeof credentials === 'string' ? JSON.parse(credentials) : credentials,
+      credentials: credentialsObj,
       scopes: ['https://www.googleapis.com/auth/drive.file']
     })
 
+    console.log('[GOOGLE DRIVE] GoogleAuth initialized successfully')
     return google.drive({ version: 'v3', auth })
   } catch (error) {
     console.error('[GOOGLE DRIVE] Error initializing client:', error)
@@ -37,7 +105,7 @@ export async function uploadToGoogleDrive(
   mimeType: string = 'image/jpeg'
 ): Promise<{ fileId: string; webViewLink: string }> {
   try {
-    console.log('[GOOGLE DRIVE] Starting upload:', { fileName, mimeType })
+    console.log('[GOOGLE DRIVE] Starting upload:', { fileName, mimeType, bufferSize: fileBuffer.length })
 
     const drive = getGoogleDriveClient()
 
@@ -69,7 +137,11 @@ export async function uploadToGoogleDrive(
 
     return { fileId, webViewLink: webViewLink || '' }
   } catch (error) {
-    console.error('[GOOGLE DRIVE] Upload failed:', error)
+    console.error('[GOOGLE DRIVE] Upload failed:', {
+      error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined
+    })
     throw new Error(`Failed to upload to Google Drive: ${error instanceof Error ? error.message : String(error)}`)
   }
 }

@@ -61,13 +61,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (uploadError) {
           console.error('[UPI PAYMENT] Screenshot upload to Supabase error:', uploadError)
         } else {
-          // Get public URL
-          const { data } = supabase.storage
+          // Get signed URL (valid for 24 hours)
+          const { data, error: urlError } = await supabase.storage
             .from('upi-screenshots')
-            .getPublicUrl(supabaseFileName)
+            .createSignedUrl(supabaseFileName, 86400) // 24 hours
           
-          screenshotUrl = data?.publicUrl || null
-          console.log('[UPI PAYMENT] Screenshot uploaded to Supabase:', screenshotUrl)
+          if (urlError) {
+            console.error('[UPI PAYMENT] Error generating signed URL:', urlError)
+          } else {
+            screenshotUrl = data?.signedUrl || null
+            console.log('[UPI PAYMENT] Screenshot uploaded to Supabase:', screenshotUrl)
+          }
         }
 
         // Upload to Google Drive

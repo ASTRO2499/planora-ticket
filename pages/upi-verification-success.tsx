@@ -7,11 +7,26 @@ export default function UPIVerificationSuccess() {
   const router = useRouter()
   const { ticketId } = router.query
   const [showDetails, setShowDetails] = useState(false)
+  const [countdown, setCountdown] = useState(8)
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowDetails(true), 2000)
-    return () => clearTimeout(timer)
+    const detailsTimer = setTimeout(() => setShowDetails(true), 2000)
+    return () => clearTimeout(detailsTimer)
   }, [])
+
+  // Auto-redirect to organizer dashboard after 8 seconds
+  useEffect(() => {
+    const countdownTimer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          router.push('/organizer')
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(countdownTimer)
+  }, [router])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
@@ -88,7 +103,7 @@ export default function UPIVerificationSuccess() {
             onClick={() => router.push('/organizer')}
             className="flex-1 bg-white/10 hover:bg-white/20 text-white font-semibold py-3 px-6 rounded-lg border border-white/20 transition duration-300"
           >
-            Back to Dashboard
+            Back to Dashboard ({countdown}s)
           </button>
         </motion.div>
 
@@ -99,7 +114,7 @@ export default function UPIVerificationSuccess() {
           transition={{ delay: 1, duration: 0.6 }}
           className="text-center text-purple-300 text-sm mt-6"
         >
-          Thank you for processing this payment! 🎉
+          Redirecting to organizer dashboard in {countdown} seconds...
         </motion.p>
       </div>
     </div>
