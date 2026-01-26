@@ -20,7 +20,7 @@ import LoadingAnimation from '../components/LoadingAnimation'
 
 export default function PaymentSuccess() {
   const router = useRouter()
-  const { ticketId, eventId } = router.query
+  const { ticketId, eventId, upiPending } = router.query
 
   const [ticket, setTicket] = useState<any>(null)
   const [event, setEvent] = useState<any>(null)
@@ -224,15 +224,29 @@ export default function PaymentSuccess() {
             transition={{ duration: 0.5 }}
           >
             <div className="flex items-center justify-center gap-3 mb-4">
-              <div className="p-3 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-full">
-                <CheckCircle2 className="w-8 h-8 text-green-400" />
+              <div className={`p-3 rounded-full ${
+                upiPending 
+                  ? 'bg-gradient-to-br from-amber-500/20 to-orange-500/20' 
+                  : 'bg-gradient-to-br from-green-500/20 to-emerald-500/20'
+              }`}>
+                {upiPending ? (
+                  <Clock className="w-8 h-8 text-amber-400" />
+                ) : (
+                  <CheckCircle2 className="w-8 h-8 text-green-400" />
+                )}
               </div>
-              <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-green-400 via-emerald-400 to-teal-400 bg-clip-text text-transparent">
-                All Set!
+              <h1 className={`text-4xl md:text-5xl font-bold bg-gradient-to-r ${
+                upiPending
+                  ? 'from-amber-400 via-yellow-400 to-orange-400'
+                  : 'from-green-400 via-emerald-400 to-teal-400'
+              } bg-clip-text text-transparent`}>
+                {upiPending ? 'Payment Pending' : 'All Set!'}
               </h1>
             </div>
-            <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-              Your registration is complete. Your ticket has been sent to your email address.
+            <p className={`text-lg ${upiPending ? 'text-slate-300' : 'text-slate-400'} max-w-2xl mx-auto`}>
+              {upiPending 
+                ? 'Your payment screenshot has been submitted successfully. Please wait for confirmation from the organizer.' 
+                : 'Your registration is complete. Your ticket has been sent to your email address.'}
             </p>
           </motion.div>
 
@@ -246,6 +260,33 @@ export default function PaymentSuccess() {
           {/* Content Cards */}
           {!loading && (
             <div className="space-y-6">
+              {/* UPI Pending Message */}
+              {upiPending && (
+                <motion.div
+                  className="p-6 bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-2xl"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0">
+                      <Clock className="w-6 h-6 text-amber-400 mt-1" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-amber-100 mb-2">Payment Under Review</h3>
+                      <p className="text-amber-50/80 text-sm mb-3">
+                        Your payment screenshot has been received successfully. The organizer will verify your payment and issue your ticket shortly.
+                      </p>
+                      <div className="space-y-2 text-sm text-amber-50/70">
+                        <p>✓ Payment screenshot submitted</p>
+                        <p>⏳ Waiting for organizer verification</p>
+                        <p>📧 You'll receive confirmation email once approved</p>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
               {/* Ticket Summary Card */}
               {ticket && (
                 <motion.div
@@ -254,9 +295,17 @@ export default function PaymentSuccess() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3, duration: 0.5 }}
                 >
-                  <div className="absolute inset-0 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none" />
+                  <div className={`absolute inset-0 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none ${
+                    upiPending 
+                      ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20' 
+                      : 'bg-gradient-to-r from-green-500/20 to-emerald-500/20'
+                  }`} />
 
-                  <div className="relative bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600/50 hover:border-green-500/50 rounded-2xl p-8 backdrop-blur-sm transition-all duration-300">
+                  <div className={`relative border rounded-2xl p-8 backdrop-blur-sm transition-all duration-300 ${
+                    upiPending
+                      ? 'bg-gradient-to-br from-slate-700/50 to-slate-800/50 border-amber-600/50 hover:border-amber-500/50'
+                      : 'bg-gradient-to-br from-slate-700/50 to-slate-800/50 border-slate-600/50 hover:border-green-500/50'
+                  }`}>
                     <div className="flex items-start justify-between mb-6">
                       <div>
                         <p className="text-sm uppercase tracking-wider text-slate-400 mb-2">
@@ -267,11 +316,15 @@ export default function PaymentSuccess() {
                         </h2>
                       </div>
                       <motion.div
-                        className="px-4 py-2 bg-green-500/20 text-green-300 text-sm font-semibold rounded-full border border-green-500/30"
+                        className={`px-4 py-2 text-sm font-semibold rounded-full border ${
+                          upiPending 
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' 
+                            : 'bg-green-500/20 text-green-300 border-green-500/30'
+                        }`}
                         animate={{ scale: [1, 1.05, 1] }}
                         transition={{ duration: 2, repeat: Infinity }}
                       >
-                        ✓ Verified
+                        {upiPending ? '⏳ Pending' : '✓ Verified'}
                       </motion.div>
                     </div>
 
@@ -330,7 +383,7 @@ export default function PaymentSuccess() {
                     )}
 
                     {/* QR Code Display */}
-                    {ticket.qr && (
+                    {ticket.qr && !upiPending && (
                       <div className="flex justify-center p-6 bg-white/5 rounded-xl border border-slate-600/30 mb-6">
                         <div className="bg-white p-4 rounded-lg">
                           <img

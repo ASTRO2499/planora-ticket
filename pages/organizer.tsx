@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
+import { motion } from 'framer-motion'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -41,8 +42,12 @@ export default function OrganizerDashboard() {
   const [driveFolderLink, setDriveFolderLink] = useState('')
   const [emailContent, setEmailContent] = useState('Dear #name,\n\nCongratulations on successfully completing the event!\n\nWe are pleased to present your certificate of participation for representing #College.\n\nYour certificate is attached with this email.\n\nBest regards,\nEvent Team')
   const [sendingEmails, setSendingEmails] = useState(false)
-  const [tab, setTab] = useState<'details' | 'certificates' | 'coupons'>('details')
+  const [tab, setTab] = useState<'details' | 'certificates' | 'coupons' | 'upi'>('details')
   const [showFormBuilder, setShowFormBuilder] = useState(false)
+  const [upiSettings, setUpiSettings] = useState({ upi_enabled: false, upi_id: '' })
+  const [upiLoading, setUpiLoading] = useState(false)
+  const [upiPayments, setUpiPayments] = useState<any[]>([])
+  const [upiPaymentsLoading, setUpiPaymentsLoading] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<any>({})
   const [editLoading, setEditLoading] = useState(false)
@@ -697,12 +702,170 @@ export default function OrganizerDashboard() {
     }
   }
 
+  async function fetchUpiSettings() {
+    if (!selected?.id) return
+    setUpiLoading(true)
+    try {
+      const res = await fetch(`/api/organizer/upi-settings?eventId=${encodeURIComponent(selected.id)}`, {
+        headers: {
+          ...(organizerSecret ? { 'x-organizer-secret': organizerSecret } : {}),
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        }
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setUpiSettings({
+          upi_enabled: data.upi_enabled || false,
+          upi_id: data.upi_id || ''
+        })
+      }
+    } catch {
+      toast.error('Failed to load UPI settings')
+    } finally {
+      setUpiLoading(false)
+    }
+  }
+
+  async function saveUpiSettings() {
+    if (!selected?.id) return
+    if (!upiSettings.upi_id.trim()) {
+      toast.error('Please enter a UPI ID')
+      return
+    }
+    setUpiLoading(true)
+    try {
+      const res = await fetch(`/api/organizer/upi-settings?eventId=${encodeURIComponent(selected.id)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(organizerSecret ? { 'x-organizer-secret': organizerSecret } : {}),
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({
+          upi_enabled: upiSettings.upi_enabled,
+          upi_id: upiSettings.upi_id
+        })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success('UPI settings updated')
+      } else {
+        toast.error(data.error || 'Failed to save UPI settings')
+      }
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setUpiLoading(false)
+    }
+  }
+
+  async function fetchUpiPayments() {
+    if (!selected?.id) return
+    setUpiPaymentsLoading(true)
+    try {
+      const res = await fetch(`/api/organizer/upi-payments?eventId=${encodeURIComponent(selected.id)}`, {
+        headers: {
+          ...(organizerSecret ? { 'x-organizer-secret': organizerSecret } : {}),
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        }
+      })
+      const data = await res.json()
+      if (res.ok) {
+        console.log('[UPI PAYMENTS DEBUG]', {
+          paymentCount: data.payments?.length || 0,
+          firstPayment: data.payments?.[0] ? {
+            id: data.payments[0].id,
+            name: data.payments[0].name,
+            hasScreenshot: !!data.payments[0].screenshot_url,
+            screenshotUrlLength: data.payments[0].screenshot_url?.length || 0
+          } : 'No payments'
+        })
+        setUpiPayments(data.payments || [])
+      }
+    } catch (err) {
+      console.error('[UPI PAYMENTS ERROR]', err)
+      toast.error('Failed to load UPI payments')
+    } finally {
+      setUpiPaymentsLoading(false)
+    }
+  }
+
+  async function approveUpiPayment(paymentId: string) {
+    if (!selected?.id) return
+    try {
+      // Show loading page while processing
+      router.push(`/upi-approval-loading?paymentId=${paymentId}&ticketId=pending`)
+      
+      // Make the API call in background
+      const res = await fetch(`/api/organizer/upi-payments?eventId=${encodeURIComponent(selected.id)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(organizerSecret ? { 'x-organizer-secret': organizerSecret } : {}),
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({
+          paymentId,
+          action: 'approve'
+        })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        // Redirect to success page with ticket ID - loading page will also redirect
+        setTimeout(() => {
+          router.push(`/upi-verification-success?ticketId=${data.ticketId}`)
+          // Refresh payments list
+          fetchUpiPayments()
+        }, 10000) // Wait for loading animation to complete
+      } else {
+        toast.error(data.error || 'Failed to approve payment')
+        router.back() // Go back if there's an error
+      }
+    } catch {
+      toast.error('Network error')
+      router.back()
+    }
+  }
+
+  async function rejectUpiPayment(paymentId: string, reason: string) {
+    if (!selected?.id) return
+    if (!reason.trim()) {
+      toast.error('Please enter rejection reason')
+      return
+    }
+    try {
+      const res = await fetch(`/api/organizer/upi-payments?eventId=${encodeURIComponent(selected.id)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(organizerSecret ? { 'x-organizer-secret': organizerSecret } : {}),
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({
+          paymentId,
+          action: 'reject',
+          rejection_reason: reason
+        })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success('Payment rejected')
+        fetchUpiPayments()
+      } else {
+        toast.error(data.error || 'Failed to reject payment')
+      }
+    } catch {
+      toast.error('Network error')
+    }
+  }
+
   useEffect(() => {
-    if (selected && tab === 'certificates') {
-      fetchCertificateStats()
+    if (selected && tab === 'upi') {
+      fetchUpiSettings()
+      fetchUpiPayments()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, tab])
+  }, [selected?.id, tab])
 
   useEffect(() => {
     // Session persistence: restore organizer session if available
@@ -1040,6 +1203,79 @@ export default function OrganizerDashboard() {
                     )}
                   </div>
                 )}
+
+                {tab === 'upi' && (
+                  <div className="space-y-6">
+                    {selected ? (
+                      <>
+                        {/* UPI Settings Section */}
+                        <Card className="p-6 bg-white/5 border-white/10">
+                          <h2 className="text-xl font-bold text-white mb-4">UPI Payment Settings</h2>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="text-sm text-slate-300 mb-2 block">Enable UPI Payments</label>
+                              <label className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={upiSettings.upi_enabled}
+                                  onChange={(e) => setUpiSettings({ ...upiSettings, upi_enabled: e.target.checked })}
+                                  className="w-5 h-5 cursor-pointer"
+                                />
+                                <span className="text-white">Allow delegates to pay via UPI</span>
+                              </label>
+                            </div>
+                            {upiSettings.upi_enabled && (
+                              <div>
+                                <label className="text-sm text-slate-300 mb-2 block">UPI ID *</label>
+                                <Input
+                                  value={upiSettings.upi_id}
+                                  onChange={(e) => setUpiSettings({ ...upiSettings, upi_id: e.target.value })}
+                                  placeholder="yourname@upi"
+                                  disabled={upiLoading}
+                                />
+                                <p className="text-xs text-slate-500 mt-1">Example: yourname@okaxis, yourname@paytm, etc.</p>
+                              </div>
+                            )}
+                            <Button onClick={saveUpiSettings} isLoading={upiLoading} variant="primary">
+                              Save UPI Settings
+                            </Button>
+                          </div>
+                        </Card>
+
+                        {/* UPI Payments Management */}
+                        <Card className="p-6 bg-white/5 border-white/10">
+                          <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold text-white">UPI Payment Requests</h2>
+                            <Button variant="outline" onClick={() => fetchUpiPayments()} isLoading={upiPaymentsLoading}>
+                              Refresh
+                            </Button>
+                          </div>
+
+                          {upiPaymentsLoading ? (
+                            <div className="text-slate-400 text-center py-8">Loading UPI payments...</div>
+                          ) : upiPayments.length === 0 ? (
+                            <div className="text-slate-400 text-center py-8">No UPI payment requests yet</div>
+                          ) : (
+                            <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                              {upiPayments.map((payment: any) => (
+                                <UpiPaymentCard
+                                  key={payment.id}
+                                  payment={payment}
+                                  onApprove={() => approveUpiPayment(payment.id)}
+                                  onReject={(reason) => rejectUpiPayment(payment.id, reason)}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </Card>
+                      </>
+                    ) : (
+                      <Card className="p-8 text-center">
+                        <p className="text-slate-400">Please select an event first</p>
+                      </Card>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </Card>
@@ -1312,6 +1548,16 @@ export default function OrganizerDashboard() {
             onClick={() => setTab(tab === 'certificates' ? 'details' : 'certificates')}
           >
             <Award className="w-5 h-5" />
+          </Button>
+          <Button
+            variant={tab === 'upi' ? 'primary' : 'cosmic'}
+            size="sm"
+            className="rounded-full w-10 h-10 p-0 shadow-lg shadow-black/20"
+            title={tab === 'upi' ? 'Back to Details' : 'UPI Payments'}
+            aria-label={tab === 'upi' ? 'Back to Details' : 'UPI Payments'}
+            onClick={() => setTab(tab === 'upi' ? 'details' : 'upi')}
+          >
+            💳
           </Button>
         </div>
 
@@ -1769,3 +2015,215 @@ function SimpleFormBuilder({ eventId, organizerSecret, accessToken }: { eventId:
   )
 }
 
+function UpiPaymentCard({ payment, onApprove, onReject }: { payment: any; onApprove: () => void; onReject: (reason: string) => void }) {
+  const [showRejectForm, setShowRejectForm] = useState(false)
+  const [rejectionReason, setRejectionReason] = useState('')
+  const [rejecting, setRejecting] = useState(false)
+  const [showScreenshotModal, setShowScreenshotModal] = useState(false)
+
+  // Debug logging
+  useEffect(() => {
+    if (showScreenshotModal) {
+      console.log('[SCREENSHOT DEBUG]', {
+        hasScreenshotUrl: !!payment.screenshot_url,
+        screenshotUrl: payment.screenshot_url,
+        paymentId: payment.id,
+        paymentName: payment.name
+      })
+    }
+  }, [showScreenshotModal, payment])
+
+  const handleReject = async () => {
+    if (!rejectionReason.trim()) {
+      toast.error('Please enter a rejection reason')
+      return
+    }
+    setRejecting(true)
+    onReject(rejectionReason)
+    setShowRejectForm(false)
+    setRejectionReason('')
+    setRejecting(false)
+  }
+
+  const statusColor: Record<string, string> = {
+    pending: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+    verified: 'bg-green-500/20 text-green-300 border-green-500/30',
+    rejected: 'bg-red-500/20 text-red-300 border-red-500/30'
+  }
+  const colorClass = statusColor[payment.status] || 'bg-slate-500/20 text-slate-300 border-slate-500/30'
+
+  return (
+    <>
+      <Card className="p-4 bg-white/5 border-white/10">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="font-semibold text-white">{payment.name}</div>
+              <span className={`text-xs px-2 py-1 rounded-full border ${colorClass}`}>
+                {payment.status?.toUpperCase()}
+              </span>
+            </div>
+            <div className="text-xs text-slate-400 space-y-1">
+              <div>Email: {payment.email}</div>
+              <div>Phone: {payment.phone || 'N/A'}</div>
+              <div>Amount: ₹{payment.amount_inr}</div>
+              <div>UPI ID: {payment.upi_id}</div>
+              {payment.transaction_id && <div>Transaction ID: {payment.transaction_id}</div>}
+              <div>Submitted: {new Date(payment.created_at).toLocaleString()}</div>
+            </div>
+          </div>
+          {payment.screenshot_url && (
+            <button
+              onClick={() => setShowScreenshotModal(true)}
+              className="text-blue-400 hover:text-blue-300 text-xs ml-4 font-semibold hover:underline transition-colors"
+            >
+              📸 View Screenshot
+            </button>
+          )}
+        </div>
+
+        {payment.status === 'pending' && (
+          <>
+            {!showRejectForm ? (
+              <div className="flex gap-2">
+                <Button
+                  onClick={onApprove}
+                  size="sm"
+                  variant="primary"
+                  className="flex-1"
+                >
+                  ✓ Approve
+                </Button>
+                <Button
+                  onClick={() => setShowRejectForm(true)}
+                  size="sm"
+                  variant="ghost"
+                  className="flex-1 text-red-400 hover:text-red-300"
+                >
+                  ✕ Reject
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <textarea
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm"
+                  placeholder="Reason for rejection..."
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  rows={2}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleReject}
+                    size="sm"
+                    variant="primary"
+                    className="flex-1"
+                    isLoading={rejecting}
+                  >
+                    Confirm Rejection
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setShowRejectForm(false)
+                      setRejectionReason('')
+                    }}
+                    size="sm"
+                    variant="ghost"
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {payment.status === 'verified' && (
+          <div className="text-xs text-green-300">
+            ✓ Verified by {payment.verified_by} on {new Date(payment.verified_at).toLocaleString()}
+          </div>
+        )}
+
+        {payment.status === 'rejected' && (
+          <div className="text-xs text-red-300">
+            ✕ Rejected: {payment.rejection_reason}
+          </div>
+        )}
+      </Card>
+
+      {/* Screenshot Modal */}
+      {showScreenshotModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowScreenshotModal(false)}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="bg-slate-900 border border-white/10 rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-white">Payment Screenshot</h3>
+              <button
+                onClick={() => setShowScreenshotModal(false)}
+                className="text-slate-400 hover:text-white text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <div className="text-sm text-slate-400 space-y-1 mb-4">
+                <div><strong>Name:</strong> {payment.name}</div>
+                <div><strong>Email:</strong> {payment.email}</div>
+                <div><strong>Amount:</strong> ₹{payment.amount_inr}</div>
+                <div><strong>Transaction ID:</strong> {payment.transaction_id}</div>
+                <div><strong>Submitted:</strong> {new Date(payment.created_at).toLocaleString()}</div>
+              </div>
+
+              {payment.screenshot_url ? (
+                <div className="bg-white/5 border border-white/10 rounded-lg p-4 flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={payment.screenshot_url}
+                    alt="Payment screenshot"
+                    className="max-w-full max-h-[60vh] rounded-lg"
+                    onError={(e) => {
+                      console.error('Image load error:', e)
+                      e.currentTarget.style.display = 'none'
+                      if (e.currentTarget.parentElement) {
+                        e.currentTarget.parentElement.innerHTML = '<div class="text-slate-400 text-center py-8">⚠️ Screenshot could not be loaded. URL: ' + payment.screenshot_url + '</div>'
+                      }
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="bg-white/5 border border-white/10 rounded-lg p-4 text-center text-slate-400">
+                  No screenshot available for this payment
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              {payment.screenshot_url && (
+                <a
+                  href={payment.screenshot_url}
+                  download
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-center font-semibold transition-colors"
+                >
+                  Download Screenshot
+                </a>
+              )}
+              <button
+                onClick={() => setShowScreenshotModal(false)}
+                className="flex-1 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg font-semibold transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </>
+  )
+}

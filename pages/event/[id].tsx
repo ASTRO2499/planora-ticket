@@ -9,6 +9,7 @@ import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Card } from '../../components/ui/Card'
 import LoadingAnimation from '../../components/LoadingAnimation'
+import UPIPayment from '../../components/UPIPayment'
 
 declare global {
   interface Window {
@@ -36,6 +37,8 @@ export default function EventRegistrationPage() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [generatingTicket, setGeneratingTicket] = useState(false)
+  const [showUpiForm, setShowUpiForm] = useState(false)
+  const [upiSettings, setUpiSettings] = useState({ upi_enabled: false, upi_id: '' })
   
   // Form fields
   const [name, setName] = useState('')
@@ -46,6 +49,7 @@ export default function EventRegistrationPage() {
   const [formSettings, setFormSettings] = useState<any>(null)
   const [extras, setExtras] = useState<string[]>(['', '', '', '', ''])
   const [selectedTier, setSelectedTier] = useState('tier_1')
+  const [selectedTicketId, setSelectedTicketId] = useState('')
   
   // Coupon state
   const [couponCode, setCouponCode] = useState('')
@@ -88,6 +92,8 @@ export default function EventRegistrationPage() {
           const foundEvent = data.events?.find((e: any) => e.id === id)
           if (foundEvent) {
             setEvent(foundEvent)
+            // Fetch UPI settings
+            fetchUpiSettings(foundEvent.id)
           } else {
             toast.error('Event not found')
           }
@@ -115,6 +121,24 @@ export default function EventRegistrationPage() {
     }
     fetchSettings()
   }, [id])
+
+  async function fetchUpiSettings(eventId: string) {
+    try {
+      const res = await fetch(`/api/organizer/upi-settings?eventId=${encodeURIComponent(eventId)}`)
+      if (res.ok) {
+        const data = await res.json()
+        console.log('[UPI] Settings fetched for event:', eventId, data)
+        setUpiSettings({
+          upi_enabled: data.upi_enabled || false,
+          upi_id: data.upi_id || ''
+        })
+      } else {
+        console.warn('[UPI] Failed to fetch settings. Status:', res.status)
+      }
+    } catch (err) {
+      console.error('[UPI] Error fetching UPI settings:', err)
+    }
+  }
 
   async function validateCoupon() {
     if (!couponCode.trim()) {
@@ -244,6 +268,19 @@ export default function EventRegistrationPage() {
         }
         return
       }
+
+      // If UPI enabled, show UPI form instead of Razorpay
+      if (upiSettings.upi_enabled && upiSettings.upi_id) {
+        console.log('[UPI] UPI enabled for this event. Showing UPI form...')
+        const ticketId = crypto.randomUUID()
+        setSelectedTicketId(ticketId)
+        setShowUpiForm(true)
+        setSubmitting(false)
+        return
+      }
+
+      console.log('[UPI] UPI not enabled or no UPI ID. Using Razorpay...')
+      console.log('[UPI] UPI Status:', { enabled: upiSettings.upi_enabled, id: upiSettings.upi_id })
 
       // Paid flow: create order then open Razorpay
       const orderRes = await fetch('/api/create-order', {
@@ -766,6 +803,78 @@ export default function EventRegistrationPage() {
             </form>
           </Card>
         </motion.div>
+
+        {/* UPI Payment Form */}
+        {showUpiForm && selectedTicketId && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <Card className="p-4 sm:p-8 bg-white/5 border-white/10">
+              <div className="flex items-center gap-3 mb-4 sm:mb-6">
+                <span className="text-2xl">💳</span>
+                <h2 className="text-xl sm:text-2xl font-bold text-white">UPI Payment</h2>
+              </div>
+
+              <UPIPayment
+                eventId={event.id}
+                ticketId={selectedTicketId}
+                amount={computeFinalAmount()}
+                name={name}
+                email={email}
+                phone={phone}
+                upiId={upiSettings.upi_id}
+                onSuccess={(paymentId) => {
+                  setShowUpiForm(false)
+                  toast.success('Payment submitted successfully!', {
+                    duration: 3000,
+                    style: {
+                      background: '#10b981',
+                      color: '#fff',
+                      fontSize: '16px',
+                      padding: '16px'
+                    }
+                  })
+                  // Redirect to waiting page
+                  setTimeout(() => {
+                    router.push(
+                      `/payment-success?ticketId=${encodeURIComponent(selectedTicketId)}&eventId=${encodeURIComponent(event.id)}&upiPending=true`
+                    )
+                  }, 1500)
+                }}
+                onError={(error) => {
+                  toast.error(error)
+                }}
+              />
+
+              <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                <p className="text-xs sm:text-sm text-slate-300">
+                  <span className="font-semibold">ℹ️ How it works:</span>
+                </p>
+                <ul className="text-xs sm:text-sm text-slate-400 mt-2 space-y-1 list-disc list-inside">
+                  <li>Transfer the amount shown above to the UPI ID</li>
+                  <li>Upload a screenshot of the payment confirmation</li>
+                  <li>Your payment will be verified by the organizer</li>
+                  <li>You'll receive your ticket once approved</li>
+                </ul>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <Button
+                  onClick={() => {
+                    setShowUpiForm(false)
+                    setSelectedTicketId('')
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Back to Registration
+                </Button>
+              </div>
+            </Card>
+          </motion.div>
+        )}
       </div>
     </div>
   )
