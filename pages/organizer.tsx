@@ -1447,6 +1447,10 @@ export default function OrganizerDashboard() {
                   <tr>
                     <th className="py-2 pr-4">Name</th>
                     <th className="py-2 pr-4">Email</th>
+                    <th className="py-2 pr-4">Phone</th>
+                    <th className="py-2 pr-4">College</th>
+                    <th className="py-2 pr-4">IEEE ID</th>
+                    <th className="py-2 pr-4">Price</th>
                     <th className="py-2 pr-4">Status</th>
                     <th className="py-2 pr-4">Used</th>
                     <th className="py-2 pr-4">Created</th>
@@ -1455,14 +1459,14 @@ export default function OrganizerDashboard() {
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {ticketsLoading ? (
-                    <tr><td className="py-4 text-slate-400" colSpan={6}>Loading attendees...</td></tr>
+                    <tr><td className="py-4 text-slate-400" colSpan={11}>Loading attendees...</td></tr>
                   ) : filteredTickets.length === 0 ? (
-                    <tr><td className="py-4 text-slate-400" colSpan={6}>No attendees yet.</td></tr>
+                    <tr><td className="py-4 text-slate-400" colSpan={11}>No attendees yet.</td></tr>
                   ) : (
                     filteredTickets.map((t) => (
                       editingId === t.id ? (
                         <tr key={t.id} className="bg-white/5">
-                          <td colSpan={6} className="py-3 px-4">
+                          <td colSpan={11} className="py-3 px-4">
                             <div className="space-y-2">
                               <div className="grid grid-cols-5 gap-2">
                                 <Input
@@ -1511,10 +1515,14 @@ export default function OrganizerDashboard() {
                       ) : (
                         <tr key={t.id} className="hover:bg-white/5">
                           <td className="py-2 pr-4 text-white">{t.name}</td>
-                          <td className="py-2 pr-4 text-slate-300">{t.email}</td>
+                          <td className="py-2 pr-4 text-slate-300 text-xs">{t.email}</td>
+                          <td className="py-2 pr-4 text-slate-300 text-xs">{t.phone || '—'}</td>
+                          <td className="py-2 pr-4 text-slate-300 text-xs">{t.college || '—'}</td>
+                          <td className="py-2 pr-4 text-slate-300 text-xs">{t.ieee || '—'}</td>
+                          <td className="py-2 pr-4 text-slate-300 text-xs">₹{t.amount_inr || '—'}</td>
                           <td className="py-2 pr-4 text-slate-300">{t.status || '—'}</td>
                           <td className="py-2 pr-4 text-slate-300">{t.used ? 'Yes' : 'No'}</td>
-                          <td className="py-2 pr-4 text-slate-400">{new Date(t.created_at).toLocaleString()}</td>
+                          <td className="py-2 pr-4 text-slate-400 text-xs">{new Date(t.created_at).toLocaleString()}</td>
                           <td className="py-2 pr-4">
                             <Button onClick={() => startEdit(t)} variant="ghost" className="h-7 px-2" title="Edit Delegate">
                               <Edit2 className="w-3 h-3 text-amber-400" />

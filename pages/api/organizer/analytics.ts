@@ -71,7 +71,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { count: issued } = await supabase.from('tickets').select('*', { count: 'exact', head: true }).eq('event_id', eventId).eq('status', 'issued')
     const { count: failed } = await supabase.from('tickets').select('*', { count: 'exact', head: true }).eq('event_id', eventId).eq('status', 'failed')
 
-    const revenue = (issued || 0) * 1000
+    // Calculate revenue - sum of all issued ticket prices from upi_payments
+    const { data: issuedTickets } = await supabase
+      .from('tickets')
+      .select('*, upi_payments(amount_inr)')
+      .eq('event_id', eventId)
+      .eq('status', 'issued')
+    
+    // Sum the amount_inr from each ticket
+    const revenue = (issuedTickets || []).reduce((sum, t) => {
+      const upiAmount = t.upi_payments?.[0]?.amount_inr
+      const amount = upiAmount || t.amount_paid || t.tier_price || 0
+      return sum + (amount || 0)
+    }, 0)
+    
     const absentees = Math.max(0, (issued || 0) - (used || 0))
     const checkInRate = (issued || 0) > 0 ? Number(((used || 0) / (issued || 0)) * 100).toFixed(1) : 0
     const issueRate = (total || 0) > 0 ? Number(((issued || 0) / (total || 0)) * 100).toFixed(1) : 0

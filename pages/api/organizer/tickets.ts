@@ -74,7 +74,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'GET') {
     let query = supabase
       .from('tickets')
-      .select('*')
+      .select('*, upi_payments(amount_inr)')
       .eq('event_id', eventId)
       .order('created_at', { ascending: false })
 
@@ -86,7 +86,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { data, error } = await query
     if (error) return res.status(500).json({ error: error.message })
-    return res.json({ tickets: data || [] })
+    
+    // Merge upi_payments amount_inr into each ticket
+    const enrichedTickets = (data || []).map((ticket: any) => {
+      const upiAmount = ticket.upi_payments?.[0]?.amount_inr
+      return {
+        ...ticket,
+        amount_inr: upiAmount || ticket.amount_paid || ticket.tier_price || 0
+      }
+    })
+    
+    return res.json({ tickets: enrichedTickets })
   }
 
   if (req.method === 'PUT') {

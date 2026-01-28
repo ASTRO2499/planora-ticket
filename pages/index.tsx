@@ -77,7 +77,7 @@ export default function LandingPage() {
                                 whileTap={{ scale: 0.95 }}
                                 className="w-full sm:w-auto"
                             >
-                                <Button variant="cosmic" className="h-12 sm:h-14 px-6 sm:px-8 text-base sm:text-lg w-full sm:w-auto">Host Now <ArrowRight className="ml-2" /></Button>
+                                <Button variant="cosmic" className="h-12 sm:h-14 px-6 sm:px-8 text-base sm:text-lg w-full sm:w-auto flex items-center justify-center gap-2">Host Now <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" /></Button>
                             </motion.div>
                         </Link>
                         <Link href="/events">
@@ -317,16 +317,6 @@ export default function LandingPage() {
                     </div>
                 </div>
             </section>
-
-            <motion.footer 
-                className="py-12 border-t border-white/10 text-center text-slate-500 text-sm"
-                initial={{ opacity: 0 }}
-                whileInView={{ opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6 }}
-            >
-                <p>© 2025 Planora Tickets — All Rights Reserved</p>
-            </motion.footer>
         </div>
     )
 }

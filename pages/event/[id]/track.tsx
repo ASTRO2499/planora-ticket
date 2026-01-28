@@ -49,13 +49,6 @@ export default function EventTrackPage() {
   useEffect(() => {
     if (!id) return
     loadEventAndSubEvents()
-    
-    // Poll for updates every 5 seconds to catch coming soon flag changes
-    const interval = setInterval(() => {
-      loadEventAndSubEvents()
-    }, 5000)
-    
-    return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
