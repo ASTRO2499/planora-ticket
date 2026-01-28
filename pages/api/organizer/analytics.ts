@@ -79,7 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .eq('status', 'issued')
     
     // Sum the amount_inr from each ticket
-    const revenue = (issuedTickets || []).reduce((sum, t) => {
+    const revenue = (issuedTickets || []).reduce((sum: number, t: any) => {
       const upiAmount = t.upi_payments?.[0]?.amount_inr
       const amount = upiAmount || t.amount_paid || t.tier_price || 0
       return sum + (amount || 0)

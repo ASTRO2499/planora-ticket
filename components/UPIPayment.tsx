@@ -186,24 +186,43 @@ export default function UPIPayment({
             </button>
           </div>
 
-          {/* QR Code Display */}
-          {qrCode && (
-            <div className="bg-white/5 border border-white/10 rounded-lg p-4 flex flex-col items-center">
-              <div className="text-xs text-slate-400 mb-3">Scan to Pay ₹{amount}</div>
-              <div className="bg-white p-3 rounded-lg">
-                <Image
-                  src={qrCode}
-                  alt="UPI Payment QR Code"
-                  width={200}
-                  height={200}
-                  className="w-48 h-48"
-                />
+          {/* QR Code and Pay Button */}
+          {/* Quick Pay Button and QR Code */}
+          <div className="space-y-3">
+            {/* Main Pay Button */}
+            <button
+              type="button"
+              onClick={() => {
+                const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(name)}&am=${amount}&tn=Event%20Registration`
+                window.location.href = upiString
+              }}
+              className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold py-4 px-6 rounded-lg transition-all duration-200 hover:shadow-lg text-lg"
+            >
+              💳 Pay ₹{amount} Now
+            </button>
+            <p className="text-xs text-slate-400 text-center">
+              Fastest way - Opens your UPI app with amount pre-filled
+            </p>
+
+            {/* QR Code Option */}
+            {qrCode && (
+              <div className="bg-white/5 border border-white/10 rounded-lg p-4 flex flex-col items-center">
+                <div className="text-xs text-slate-400 mb-3">Or Scan QR Code</div>
+                <div className="bg-white p-3 rounded-lg">
+                  <Image
+                    src={qrCode}
+                    alt="UPI Payment QR Code"
+                    width={200}
+                    height={200}
+                    className="w-40 h-40"
+                  />
+                </div>
+                <p className="text-xs text-slate-400 mt-3 text-center">
+                  Scan with any UPI app
+                </p>
               </div>
-              <p className="text-xs text-slate-400 mt-3 text-center">
-                Scan with your UPI app or enter amount ₹{amount}
-              </p>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Transaction ID */}
           <div>
