@@ -847,6 +847,8 @@ export default function EventRegistrationPage() {
                 name={name}
                 email={email}
                 phone={phone}
+                college={college}
+                ieee={ieee}
                 upiId={upiSettings.upi_id}
                 onSuccess={(paymentId) => {
                   setShowUpiForm(false)

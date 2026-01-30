@@ -23,6 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     email,
     phone,
     college,
+    ieee,
     amount_inr,
     upi_id,
     transaction_id,
@@ -93,6 +94,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           name,
           email,
           phone,
+          college: college || null,
+          ieee: ieee || null,
           payment_method: 'upi',
           upi_payment_status: 'pending',
           status: 'pending',
@@ -107,6 +110,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await supabase
         .from('tickets')
         .update({
+          college: college || null,
+          ieee: ieee || null,
           payment_method: 'upi',
           upi_payment_status: 'pending',
           upi_screenshot_url: screenshotUrl
@@ -115,26 +120,67 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Create UPI payment record
-    const { data: upiPayment, error: insertError } = await supabase
+    // Try with college and ieee fields first (if columns exist in DB)
+    let upiPayment: any = null
+    let insertError: any = null
+    
+    let insertData: any = {
+      event_id: eventId,
+      ticket_id: ticketId,
+      name,
+      email,
+      phone,
+      amount_inr,
+      upi_id,
+      transaction_id: transaction_id || null,
+      screenshot_url: screenshotUrl,
+      status: 'pending'
+    }
+
+    // Add college and ieee if columns exist in table
+    if (college) insertData.college = college
+    if (ieee) insertData.ieee = ieee
+
+    const insertResult = await supabase
       .from('upi_payments')
-      .insert({
-        event_id: eventId,
-        ticket_id: ticketId,
-        name,
-        email,
-        phone,
-        amount_inr,
-        upi_id,
-        transaction_id: transaction_id || null,
-        screenshot_url: screenshotUrl,
-        status: 'pending'
-      })
+      .insert(insertData)
       .select()
       .single()
 
+    upiPayment = insertResult.data
+    insertError = insertResult.error
+
     if (insertError) {
-      console.error('[UPI PAYMENT] Error creating UPI payment record:', insertError)
-      return res.status(500).json({ error: 'Failed to save payment record' })
+      // If error is about unknown columns, try without them
+      if (insertError.message?.includes('column') || insertError.message?.includes('college') || insertError.message?.includes('ieee')) {
+        console.warn('[UPI PAYMENT] Columns may not exist yet, retrying without college/ieee:', insertError.message)
+        const retryData = {
+          event_id: eventId,
+          ticket_id: ticketId,
+          name,
+          email,
+          phone,
+          amount_inr,
+          upi_id,
+          transaction_id: transaction_id || null,
+          screenshot_url: screenshotUrl,
+          status: 'pending'
+        }
+        const retryResult = await supabase
+          .from('upi_payments')
+          .insert(retryData)
+          .select()
+          .single()
+        
+        if (retryResult.error) {
+          console.error('[UPI PAYMENT] Error creating UPI payment record:', retryResult.error)
+          return res.status(500).json({ error: 'Failed to save payment record' })
+        }
+        upiPayment = retryResult.data
+      } else {
+        console.error('[UPI PAYMENT] Error creating UPI payment record:', insertError)
+        return res.status(500).json({ error: 'Failed to save payment record' })
+      }
     }
 
     console.log('[UPI PAYMENT] Payment record created:', {

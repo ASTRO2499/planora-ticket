@@ -14,6 +14,7 @@ interface UPIPaymentProps {
   email: string
   phone: string
   college?: string
+  ieee?: string
   upiId: string
   onSuccess: (paymentId: string) => void
   onError: (error: string) => void
@@ -27,6 +28,7 @@ export default function UPIPayment({
   email,
   phone,
   college = '',
+  ieee = '',
   upiId,
   onSuccess,
   onError
@@ -122,6 +124,7 @@ export default function UPIPayment({
               email,
               phone,
               college,
+              ieee,
               amount_inr: amount,
               upi_id: upiId,
               transaction_id: transactionId,

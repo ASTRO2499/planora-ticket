@@ -3,7 +3,7 @@ import Razorpay from 'razorpay'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end()
-  const { name, email, amount: bodyAmount, selectedTier, tierPrice } = req.body
+  const { name, email, phone, college, ieee, amount: bodyAmount, selectedTier, tierPrice } = req.body
   const key = process.env.RAZORPAY_KEY_ID || ''
   const secret = process.env.RAZORPAY_KEY_SECRET || ''
   if (!key || !secret) {
@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       amount,
       currency: 'INR',
       receipt: `rcpt_${Date.now()}`,
-      notes: { name, email, selectedTier, tierPrice } // Include tier info in notes
+      notes: { name, email, phone, college, ieee, selectedTier, tierPrice } // Include all user details in notes
     })
     return res.json({ orderId: order.id, amount: order.amount, razorpayKey: key, selectedTier, tierPrice })
   } catch (err) {
