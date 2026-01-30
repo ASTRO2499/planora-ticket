@@ -55,16 +55,17 @@ export function generateTicketConfirmationEmail(options: EmailTemplateOptions): 
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: #f5f5f5;
+      background: #0f172a;
       padding: 20px;
     }
     .wrapper {
       max-width: 600px;
       margin: 0 auto;
-      background: white;
+      background: #1a2747;
       border-radius: 16px;
       overflow: hidden;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(124, 58, 237, 0.3);
     }
     .header {
       background: linear-gradient(135deg, ${brandPrimary} 0%, ${brandAccent} 100%);
@@ -92,101 +93,111 @@ export function generateTicketConfirmationEmail(options: EmailTemplateOptions): 
     }
     .content {
       padding: 40px 24px;
+      background: #0f172a;
+      color: #f1f5f9;
+      text-align: center;
     }
     .greeting {
       font-size: 16px;
       font-weight: 600;
-      color: #1a1a1a;
+      color: #f1f5f9;
       margin-bottom: 8px;
     }
     .greeting .name {
       color: ${brandPrimary};
     }
     .intro-text {
-      font-size: 14px;
-      color: #555;
-      line-height: 1.6;
+      font-size: 15px;
+      color: #cbd5e1;
+      line-height: 1.7;
       margin-bottom: 32px;
+      text-align: center;
     }
     .section {
       margin-bottom: 28px;
+      text-align: center;
     }
     .section-title {
       font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
-      color: #999;
-      letter-spacing: 0.5px;
+      color: ${brandPrimary};
+      letter-spacing: 1px;
       margin-bottom: 12px;
       padding-bottom: 8px;
-      border-bottom: 2px solid #f0f0f0;
+      border-bottom: 2px solid rgba(124, 58, 237, 0.3);
     }
     .event-card {
-      background: linear-gradient(135deg, rgba(${hexToRgb(brandPrimary)}, 0.08) 0%, rgba(${hexToRgb(brandAccent)}, 0.08) 100%);
-      border: 1px solid rgba(${hexToRgb(brandPrimary)}, 0.2);
+      background: rgba(124, 58, 237, 0.12);
+      border: 2px solid ${brandPrimary};
       border-radius: 12px;
-      padding: 20px;
+      padding: 24px;
+      text-align: center;
     }
     .event-name {
       font-size: 18px;
       font-weight: 700;
-      color: #1a1a1a;
+      color: #f1f5f9;
       margin-bottom: 12px;
     }
     .event-detail {
       font-size: 13px;
-      color: #666;
+      color: #cbd5e1;
       margin-bottom: 6px;
       display: flex;
-      align-items: flex-start;
+      align-items: center;
+      justify-content: center;
     }
     .event-detail-label {
       font-weight: 600;
-      color: #999;
-      min-width: 70px;
+      color: ${brandPrimary};
+      margin-right: 8px;
     }
     .event-detail-value {
-      color: #333;
+      color: #cbd5e1;
       flex: 1;
     }
     .ticket-info-card {
-      background: #f9f9f9;
-      border: 1px solid #e0e0e0;
+      background: rgba(124, 58, 237, 0.12);
+      border: 2px solid ${brandPrimary};
       border-radius: 8px;
-      padding: 16px;
+      padding: 20px;
       margin-bottom: 12px;
+      text-align: center;
     }
     .ticket-info-row {
       display: flex;
-      justify-content: space-between;
-      padding: 10px 0;
-      border-bottom: 1px solid #f0f0f0;
+      flex-direction: column;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(124, 58, 237, 0.2);
+      text-align: center;
     }
     .ticket-info-row:last-child {
       border-bottom: none;
     }
     .ticket-info-label {
-      font-size: 12px;
-      font-weight: 600;
-      color: #999;
+      font-size: 11px;
+      font-weight: 700;
+      color: ${brandPrimary};
       text-transform: uppercase;
-      letter-spacing: 0.3px;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
     }
     .ticket-info-value {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 600;
-      color: #1a1a1a;
+      color: #f1f5f9;
     }
     .ticket-info-value.id {
       font-family: 'Courier New', monospace;
-      font-size: 11px;
-      color: ${brandPrimary};
+      font-size: 14px;
+      color: ${brandAccent};
       word-break: break-all;
     }
     .qr-section {
       text-align: center;
-      background: rgba(${hexToRgb(brandAccent)}, 0.1);
-      border: 2px dashed ${brandAccent};
+      background: rgba(236, 72, 153, 0.12);
+      border: 2px solid ${brandAccent};
       border-radius: 12px;
       padding: 24px;
       margin: 24px 0;
@@ -195,9 +206,9 @@ export function generateTicketConfirmationEmail(options: EmailTemplateOptions): 
       font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
-      color: #666;
+      color: ${brandAccent};
       margin-bottom: 12px;
-      letter-spacing: 0.5px;
+      letter-spacing: 1px;
     }
     .qr-image {
       width: 180px;
@@ -206,12 +217,12 @@ export function generateTicketConfirmationEmail(options: EmailTemplateOptions): 
       background: white;
       padding: 8px;
       border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     }
     .qr-instruction {
-      font-size: 12px;
-      color: #666;
-      line-height: 1.5;
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.6;
       font-weight: 500;
     }
     .action-buttons {

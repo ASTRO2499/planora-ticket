@@ -4,9 +4,10 @@ import { toast } from 'react-hot-toast'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
-import { ShieldCheck, LogOut, Search, CheckCircle, XCircle, Trash2, Mail, Download, TrendingUp, Users, DollarSign, Edit2, X, Radio, Home, LayoutDashboard } from 'lucide-react'
+import { ShieldCheck, LogOut, Search, CheckCircle, XCircle, Trash2, Mail, Download, TrendingUp, Users, DollarSign, Edit2, X, Radio, Home, LayoutDashboard, Lock } from 'lucide-react'
 import Link from 'next/link'
 import TicketGenerationAnimation from '../components/TicketGenerationAnimation'
+import { QRCredentialsManager } from '../components/QRCredentialsManager'
 
 type AuthState = 'unknown' | 'authenticated' | 'unauthenticated'
 
@@ -31,6 +32,7 @@ export default function AdminPage() {
   const [generatingTickets, setGeneratingTickets] = useState(false)
   const [generationStage, setGenerationStage] = useState<'preparing' | 'generating' | 'sending' | 'complete'>('preparing')
   const [generationProgress, setGenerationProgress] = useState(0)
+  const [adminTab, setAdminTab] = useState<'tickets' | 'credentials'>('tickets')
   const isAuthed = authState === 'authenticated'
 
   const search = useCallback(async (e?: React.FormEvent<HTMLFormElement>) => {
@@ -353,7 +355,7 @@ export default function AdminPage() {
       toast.error('No tickets to export')
       return
     }
-    const headers = ['ID', 'Name', 'Email', 'Phone', 'College', 'IEEE', 'Status', 'Used', 'Created']
+    const headers = ['ID', 'Name', 'Email', 'Phone', 'College', 'IEEE', 'Extra 1', 'Extra 2', 'Extra 3', 'Extra 4', 'Extra 5', 'Price', 'Status', 'Used', 'Created']
     const rows = tickets.map(t => [
       t.id,
       t.name,
@@ -361,6 +363,12 @@ export default function AdminPage() {
       t.phone || '',
       t.college || '',
       t.ieee || '',
+      t.extra1 || '',
+      t.extra2 || '',
+      t.extra3 || '',
+      t.extra4 || '',
+      t.extra5 || '',
+      t.amount_inr || t.tier_price || '',
       t.status || '',
       t.used ? 'Yes' : 'No',
       new Date(t.created_at).toLocaleString()
@@ -432,6 +440,33 @@ export default function AdminPage() {
         </div>
       ) : (
         <div className="space-y-6">
+          {/* Tab Navigation */}
+          <div className="flex gap-2 border-b border-white/10">
+            <button
+              onClick={() => setAdminTab('tickets')}
+              className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 -mb-px ${
+                adminTab === 'tickets'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-slate-400 hover:text-white'
+              }`}
+            >
+              <Search className="w-4 h-4 mr-2 inline" /> Tickets
+            </button>
+            <button
+              onClick={() => setAdminTab('credentials')}
+              className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 -mb-px ${
+                adminTab === 'credentials'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-slate-400 hover:text-white'
+              }`}
+            >
+              <Lock className="w-4 h-4 mr-2 inline" /> QR Check-in
+            </button>
+          </div>
+
+          {/* Tickets Tab */}
+          {adminTab === 'tickets' && (
+            <>
           {/* Event Selector */}
           <div className="flex items-center gap-3">
             <label className="text-sm text-slate-400">Event</label>
@@ -752,6 +787,23 @@ export default function AdminPage() {
               </motion.div>
             ))}
           </div>
+            </>
+          )}
+
+          {/* QR Check-in Credentials Tab */}
+          {adminTab === 'credentials' && (
+            <>
+              {eventFilter === 'ALL' ? (
+                <Card className="p-6 bg-white/5 border-white/10 text-center text-slate-300">
+                  <Lock className="w-8 h-8 mx-auto mb-3 text-slate-500" />
+                  <p className="font-semibold">Select an event</p>
+                  <p className="text-sm text-slate-400 mt-1">Choose a specific event from the dropdown above to manage QR check-in credentials</p>
+                </Card>
+              ) : (
+                <QRCredentialsManager eventId={eventFilter} />
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

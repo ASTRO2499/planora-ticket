@@ -16,6 +16,7 @@
     "@microsoft/clarity": "^1.0.2",
     "@supabase/supabase-js": "2.27.0",
     "@vercel/analytics": "^1.6.1",
+    "bcrypt": "^5.1.1",
     "clsx": "^2.1.1",
     "formidable": "^3.5.4",
     "framer-motion": "^10.12.16",
@@ -32,12 +33,13 @@
     "tailwindcss": "3.4.7"
   },
   "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
     "@types/formidable": "^3.4.6",
     "@types/node": "^20.11.30",
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.5",
     "autoprefixer": "10.4.20",
-    "baseline-browser-mapping": "^2.9.5",
+    "baseline-browser-mapping": "^2.9.19",
     "critters": "^0.0.23",
     "eslint": "^9.39.1",
     "eslint-config-next": "16.0.3",

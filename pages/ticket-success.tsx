@@ -20,7 +20,7 @@ export default function TicketSuccess() {
       setLoading(false)
       return
     }
-        setShowAnimation(true)
+    setShowAnimation(true)
 
     async function fetchTickets() {
       try {
@@ -36,14 +36,17 @@ export default function TicketSuccess() {
         const data = await res.json()
         if (res.ok && data.tickets) {
           setTickets(data.tickets)
-          // Hide animation after 1.5 seconds
-          setTimeout(() => setShowAnimation(false), 1500)
+          // Hide animation after 2 seconds
+          const timer = setTimeout(() => setShowAnimation(false), 2000)
+          return () => clearTimeout(timer)
         } else {
           toast.error(data.error || 'Failed to fetch tickets')
+          setShowAnimation(false)
         }
       } catch (err) {
         console.error('Error fetching tickets:', err)
         toast.error('Failed to fetch tickets')
+        setShowAnimation(false)
       } finally {
         setLoading(false)
       }
@@ -64,11 +67,12 @@ export default function TicketSuccess() {
         <AnimatePresence>
           {showAnimation && (
             <motion.div
-              className="fixed inset-0 flex flex-col items-center justify-center z-50 bg-black/40 backdrop-blur-sm pointer-events-auto px-4"
+              className="fixed inset-0 flex flex-col items-center justify-center z-50 bg-black/40 backdrop-blur-sm pointer-events-auto px-4 cursor-pointer"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.5 }}
+              onClick={() => setShowAnimation(false)}
             >
               <motion.div
                 className="flex flex-col items-center gap-6 sm:gap-8"
@@ -80,6 +84,7 @@ export default function TicketSuccess() {
                   damping: 20,
                   duration: 0.5
                 }}
+                onClick={(e) => e.stopPropagation()}
               >
                 {/* Checkmark */}
                 <motion.div
@@ -117,6 +122,15 @@ export default function TicketSuccess() {
                   <p className="text-lg text-emerald-200">
                     Your tickets are ready
                   </p>
+                  <motion.button
+                    onClick={() => setShowAnimation(false)}
+                    className="mt-6 px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-semibold transition-colors"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.8, duration: 0.3 }}
+                  >
+                    View Tickets
+                  </motion.button>
                 </motion.div>
               </motion.div>
             </motion.div>

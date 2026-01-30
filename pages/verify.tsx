@@ -1,14 +1,17 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Head from 'next/head'
+import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { toast } from 'react-hot-toast'
-import { Shield, QrCode, CheckCircle, XCircle, LogOut, User, Search, BarChart3, Clock, Volume2, VolumeX, History, Camera, PauseCircle, RotateCw } from 'lucide-react'
+import { Shield, QrCode, CheckCircle, XCircle, LogOut, User, Search, BarChart3, Clock, Volume2, VolumeX, History, Camera, PauseCircle, RotateCw, Lock } from 'lucide-react'
 
 export default function Verify() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [loggedInUsername, setLoggedInUsername] = useState<string | null>(null)
+  const [sessionToken, setSessionToken] = useState<string | null>(null)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -36,18 +39,49 @@ export default function Verify() {
     })
   }, [])
 
+  // Restore session on page load
+  useEffect(() => {
+    const savedUsername = sessionStorage.getItem('verify_username')
+    const savedToken = sessionStorage.getItem('verify_token')
+    if (savedUsername && savedToken) {
+      setLoggedInUsername(savedUsername)
+      setSessionToken(savedToken)
+      setIsAuthenticated(true)
+    }
+  }, [])
+
   function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     
-    if (username === 'ASTRO' && password === 'ASTRO') {
-      toast.success('Login successful!')
-      setIsAuthenticated(true)
-      localStorage.setItem('verify_auth', 'true')
-    } else {
-      toast.error('Invalid credentials')
-    }
-    setLoading(false)
+    // Call the verify login API
+    fetch('/api/verify-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          toast.success(`Welcome, ${data.username}!`)
+          setIsAuthenticated(true)
+          setLoggedInUsername(data.username)
+          setSessionToken(data.sessionToken)
+          // Store in sessionStorage (clears on browser close)
+          sessionStorage.setItem('verify_username', data.username)
+          sessionStorage.setItem('verify_token', data.sessionToken)
+          // Reset form
+          setUsername('')
+          setPassword('')
+        } else {
+          toast.error(data.error || 'Invalid credentials')
+        }
+      })
+      .catch(err => {
+        console.error('Login error:', err)
+        toast.error('Login failed')
+      })
+      .finally(() => setLoading(false))
   }
 
   async function loadHtml5QrLib() {
@@ -74,11 +108,15 @@ export default function Verify() {
 
   function handleLogout() {
     setIsAuthenticated(false)
-    localStorage.removeItem('verify_auth')
+    setLoggedInUsername(null)
+    setSessionToken(null)
     setScanHistory([])
     setStats({ total: 0, valid: 0, invalid: 0 })
     sessionScannedIdsRef.current.clear()
-    toast.success('Logged out')
+    sessionStorage.removeItem('verify_username')
+    sessionStorage.removeItem('verify_token')
+    localStorage.removeItem('verify_auth')
+    toast.success('Logged out successfully')
   }
 
   const playSound = useCallback((success: boolean) => {
@@ -518,6 +556,21 @@ export default function Verify() {
                   Login
                 </Button>
               </form>
+
+              {/* Info Box for Admins */}
+              <div className="mt-6 sm:mt-8 pt-6 sm:pt-8 border-t border-white/10">
+                <div className="space-y-3">
+                  <p className="text-xs sm:text-sm text-slate-400 text-center font-semibold">Need Credentials?</p>
+                  <p className="text-xs text-slate-500 text-center">
+                    Ask your event organizer for username and password. Credentials are created in the Admin Panel under the QR Check-in tab.
+                  </p>
+                  <Link href="/admin">
+                    <Button variant="ghost" className="w-full text-xs sm:text-sm h-8 sm:h-auto">
+                      <Lock className="w-3 h-3 sm:w-4 sm:h-4 mr-1.5" /> Go to Admin Panel
+                    </Button>
+                  </Link>
+                </div>
+              </div>
             </div>
           </Card>
         </motion.div>
@@ -544,7 +597,17 @@ export default function Verify() {
             </div>
           </div>
           
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 flex-wrap">
+            {/* Logged-in user display */}
+            {loggedInUsername && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+                <User className="w-4 h-4 text-violet-400" />
+                <span className="text-xs sm:text-sm text-white font-medium">
+                  {loggedInUsername}
+                </span>
+              </div>
+            )}
+            
             <Button 
               onClick={() => setSoundEnabled(!soundEnabled)} 
               variant="ghost"
