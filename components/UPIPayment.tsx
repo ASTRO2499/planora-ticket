@@ -80,20 +80,35 @@ export default function UPIPayment({
       return
     }
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file')
+    // Validate file type - only common image types
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg']
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Please upload a valid image file (JPG, PNG, WebP)')
       return
     }
 
-    setScreenshot(file)
-
-    // Create preview
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      setScreenshotPreview(reader.result as string)
+    // Additional check: validate image dimensions to prevent malicious files
+    const img = new Image()
+    img.onload = () => {
+      if (img.width < 100 || img.height < 100) {
+        toast.error('Image too small - please upload a clearer screenshot')
+        return
+      }
+      if (img.width > 10000 || img.height > 10000) {
+        toast.error('Image too large - please upload a smaller screenshot')
+        return
+      }
+      setScreenshot(file)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setScreenshotPreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
     }
-    reader.readAsDataURL(file)
+    img.onerror = () => {
+      toast.error('Invalid image file')
+    }
+    img.src = URL.createObjectURL(file)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -104,8 +119,20 @@ export default function UPIPayment({
       return
     }
 
+    // Validate transaction ID format (alphanumeric, 5-40 chars)
+    if (!/^[a-zA-Z0-9]{5,40}$/.test(transactionId)) {
+      toast.error('Invalid transaction ID format')
+      return
+    }
+
     if (!screenshot) {
       toast.error('Please upload payment screenshot')
+      return
+    }
+
+    // Validate amount is positive and not NaN
+    if (isNaN(amount) || amount <= 0 || amount > 100000) {
+      toast.error('Invalid payment amount')
       return
     }
 

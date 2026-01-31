@@ -6,9 +6,26 @@ const supabase = createClient(process.env.SUPABASE_URL || '', process.env.SUPABA
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: '50mb'
+      sizeLimit: '10mb' // Reduced from 50mb
     }
   }
+}
+
+// UPI ID validation regex
+function isValidUPIId(upiId: string): boolean {
+  const upiRegex = /^[a-zA-Z0-9._-]{3,60}@[a-zA-Z]{3,10}$/
+  return upiRegex.test(upiId)
+}
+
+// Transaction ID validation (alphanumeric, common patterns)
+function isValidTransactionId(id: string): boolean {
+  return /^[a-zA-Z0-9]{5,40}$/.test(id)
+}
+
+// Amount validation
+function isValidAmount(amount: any): boolean {
+  const num = Number(amount)
+  return !isNaN(num) && num > 0 && num <= 100000 && Number.isInteger(num)
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -35,6 +52,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Validate required fields
   if (!eventId || !ticketId || !name || !email || !amount_inr || !upi_id) {
     return res.status(400).json({ error: 'Missing required fields' })
+  }
+
+  // Validate amount
+  if (!isValidAmount(amount_inr)) {
+    return res.status(400).json({ error: 'Invalid amount' })
+  }
+
+  // Validate UPI ID format
+  if (!isValidUPIId(upi_id)) {
+    return res.status(400).json({ error: 'Invalid UPI ID format' })
+  }
+
+  // Validate transaction ID
+  if (!transaction_id || !isValidTransactionId(transaction_id)) {
+    return res.status(400).json({ error: 'Invalid transaction ID format' })
+  }
+
+  // Validate email format
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'Invalid email format' })
+  }
+
+  // Validate screenshot exists
+  if (!screenshotBase64) {
+    return res.status(400).json({ error: 'Screenshot is required' })
+  }
+
+  // Validate screenshot size (5MB max)
+  const screenshotSize = Buffer.byteLength(screenshotBase64, 'utf8')
+  if (screenshotSize > 5 * 1024 * 1024) {
+    return res.status(400).json({ error: 'Screenshot too large' })
   }
 
   try {
