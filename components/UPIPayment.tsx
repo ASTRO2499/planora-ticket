@@ -45,9 +45,10 @@ export default function UPIPayment({
   useEffect(() => {
     const generateQrCode = async () => {
       try {
-        // UPI unified payment interface format
-        // upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT
-        const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(name)}&am=${amount}`
+        // UPI unified payment interface format - minimal parameters for safety
+        // upi://pay?pa=UPI_ID&am=AMOUNT
+        const amountStr = String(Math.round(amount))
+        const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&am=${amountStr}`
         const qrCodeUrl = await QRCode.toDataURL(upiString, {
           errorCorrectionLevel: 'H',
           type: 'image/jpeg',
@@ -67,7 +68,7 @@ export default function UPIPayment({
     if (upiId && amount > 0) {
       generateQrCode()
     }
-  }, [upiId, amount, name])
+  }, [upiId, amount])
 
   const handleScreenshotChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -199,7 +200,8 @@ export default function UPIPayment({
             <button
               type="button"
               onClick={() => {
-                const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(name)}&am=${amount}`
+                const amountStr = String(Math.round(amount))
+                const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&am=${amountStr}`
                 window.location.href = upiString
               }}
               className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold py-4 px-6 rounded-lg transition-all duration-200 hover:shadow-lg text-lg"
