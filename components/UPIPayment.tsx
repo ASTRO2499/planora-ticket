@@ -46,8 +46,8 @@ export default function UPIPayment({
     const generateQrCode = async () => {
       try {
         // UPI unified payment interface format
-        // upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT&tn=DESCRIPTION
-        const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(name)}&am=${amount}&tn=Event%20Registration`
+        // upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT
+        const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(name)}&am=${amount}`
         const qrCodeUrl = await QRCode.toDataURL(upiString, {
           errorCorrectionLevel: 'H',
           type: 'image/jpeg',
@@ -199,7 +199,7 @@ export default function UPIPayment({
             <button
               type="button"
               onClick={() => {
-                const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(name)}&am=${amount}&tn=Event%20Registration`
+                const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(name)}&am=${amount}`
                 window.location.href = upiString
               }}
               className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold py-4 px-6 rounded-lg transition-all duration-200 hover:shadow-lg text-lg"
