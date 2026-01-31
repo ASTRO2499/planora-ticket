@@ -88,7 +88,7 @@ export default function UPIPayment({
     }
 
     // Additional check: validate image dimensions to prevent malicious files
-    const img = new Image()
+    const img = new (window.Image || Image)()
     img.onload = () => {
       if (img.width < 100 || img.height < 100) {
         toast.error('Image too small - please upload a clearer screenshot')
@@ -221,28 +221,11 @@ export default function UPIPayment({
           </div>
 
           {/* QR Code and Pay Button */}
-          {/* Quick Pay Button and QR Code */}
+          {/* QR Code Option */}
           <div className="space-y-3">
-            {/* Main Pay Button */}
-            <button
-              type="button"
-              onClick={() => {
-                const amountStr = String(Math.round(amount))
-                const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&am=${amountStr}`
-                window.location.href = upiString
-              }}
-              className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold py-4 px-6 rounded-lg transition-all duration-200 hover:shadow-lg text-lg"
-            >
-              💳 Pay ₹{amount} Now
-            </button>
-            <p className="text-xs text-slate-400 text-center">
-              Fastest way - Opens your UPI app with amount pre-filled
-            </p>
-
-            {/* QR Code Option */}
             {qrCode && (
               <div className="bg-white/5 border border-white/10 rounded-lg p-4 flex flex-col items-center">
-                <div className="text-xs text-slate-400 mb-3">Or Scan QR Code</div>
+                <div className="text-xs text-slate-400 mb-3">Scan QR Code</div>
                 <div className="bg-white p-3 rounded-lg">
                   <Image
                     src={qrCode}
@@ -253,7 +236,7 @@ export default function UPIPayment({
                   />
                 </div>
                 <p className="text-xs text-slate-400 mt-3 text-center">
-                  Scan with any UPI app
+                  Scan with any UPI app to pay ₹{amount}
                 </p>
               </div>
             )}
