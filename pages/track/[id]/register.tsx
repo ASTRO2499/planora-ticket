@@ -17,6 +17,7 @@ type SubEvent = {
   start_time?: string
   location?: string
   speaker_name?: string
+  image_url?: string
   max_capacity?: number
   current_registrations: number
   price_inr?: number
@@ -191,6 +192,15 @@ export default function TrackRegisterPage() {
 
       {/* Sub-Event Info */}
       <Card className="p-4 sm:p-6 bg-white/5 border-white/10 space-y-3">
+        {subEvent.image_url && (
+          <div className="w-full h-48 sm:h-64 rounded-lg overflow-hidden mb-4">
+            <img 
+              src={subEvent.image_url} 
+              alt={subEvent.title}
+              className="w-full h-full object-cover"
+            />
+          </div>
+        )}
         <h1 className="text-2xl sm:text-3xl font-bold text-white">{subEvent.title}</h1>
         <p className="text-slate-300 text-sm sm:text-base">{subEvent.description}</p>
         

@@ -7,7 +7,7 @@ import { Button } from '../../../components/ui/Button'
 import { Input } from '../../../components/ui/Input'
 import LoadingAnimation from '../../../components/LoadingAnimation'
 import { toast } from 'react-hot-toast'
-import { ChevronLeft, Calendar, MapPin, User } from 'lucide-react'
+import { ChevronLeft, Calendar, MapPin, User, X } from 'lucide-react'
 import { TrackComingSoon } from '../../../components/TrackComingSoon'
 
 type SubEvent = {
@@ -18,6 +18,7 @@ type SubEvent = {
   start_time?: string
   end_time?: string
   location?: string
+  image_url?: string
   max_capacity?: number
   current_registrations: number
   speaker_name?: string
@@ -45,6 +46,7 @@ export default function EventTrackPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -201,6 +203,23 @@ export default function EventTrackPage() {
                   className="p-4 sm:5 bg-white/5 border-white/10 hover:bg-white/8 hover:border-white/20 transition cursor-pointer"
                 >
                   <div className="space-y-3">
+                    {/* Cover Image Preview */}
+                    {subEvent.image_url && (
+                      <div className="relative w-full h-40 sm:h-48 rounded-lg overflow-hidden cursor-pointer group">
+                        <img
+                          src={subEvent.image_url}
+                          alt={subEvent.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          onClick={() => setSelectedImageUrl(subEvent.image_url)}
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center">
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-white text-sm font-medium bg-black/50 px-4 py-2 rounded-lg">
+                            Click to Expand
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Header with Title and Type */}
                     <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 justify-between">
                       <div className="flex-1">
@@ -269,6 +288,26 @@ export default function EventTrackPage() {
             <p className="text-xs sm:text-sm text-slate-400 text-center">
               Showing {filteredSubEvents.length} of {subEvents.length} sessions
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Image Preview Modal */}
+      {selectedImageUrl && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="relative w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <button
+              onClick={() => setSelectedImageUrl(null)}
+              className="absolute -top-10 -right-10 sm:-top-8 sm:-right-8 text-white hover:text-slate-300 transition-colors z-10"
+              aria-label="Close modal"
+            >
+              <X className="w-8 h-8" />
+            </button>
+            <img
+              src={selectedImageUrl}
+              alt="Expanded preview"
+              className="w-full h-full object-contain rounded-lg"
+            />
           </div>
         </div>
       )}

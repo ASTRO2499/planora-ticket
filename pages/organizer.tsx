@@ -55,7 +55,8 @@ export default function OrganizerDashboard() {
   const [subEvents, setSubEvents] = useState<any[]>([])
   const [showSubEventsModal, setShowSubEventsModal] = useState(false)
   const [subEventsLoading, setSubEventsLoading] = useState(false)
-  const [newSubEvent, setNewSubEvent] = useState({ title: '', type: 'workshop', description: '', start_time: '', end_time: '', location: '', max_capacity: '', speaker_name: '', speaker_email: '', price_inr: '', requires_payment: false })
+  const [newSubEvent, setNewSubEvent] = useState({ title: '', type: 'workshop', description: '', start_time: '', end_time: '', location: '', max_capacity: '', speaker_name: '', speaker_email: '', price_inr: '', requires_payment: false, image_url: '' })
+  const [subEventCoverFile, setSubEventCoverFile] = useState<File | null>(null)
   const [editingSubEventId, setEditingSubEventId] = useState<string | null>(null)
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null)
   const [trackRegistrations, setTrackRegistrations] = useState<any[]>([])
@@ -150,26 +151,42 @@ export default function OrganizerDashboard() {
     
     setSubEventsLoading(true)
     try {
-      const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+      const form = new FormData()
+      const payload = {
+        title: newSubEvent.title,
+        type: newSubEvent.type,
+        description: newSubEvent.description,
+        start_time: newSubEvent.start_time,
+        end_time: newSubEvent.end_time,
+        location: newSubEvent.location,
+        max_capacity: newSubEvent.max_capacity ? parseInt(newSubEvent.max_capacity) : null,
+        speaker_name: newSubEvent.speaker_name,
+        speaker_email: newSubEvent.speaker_email,
+        price_inr: newSubEvent.price_inr ? parseFloat(newSubEvent.price_inr) : 0,
+        requires_payment: newSubEvent.requires_payment
+      }
+      form.append('data', JSON.stringify(payload))
+      if (subEventCoverFile) {
+        form.append('coverImage', subEventCoverFile)
+      }
+      
+      const headers: Record<string,string> = {}
       if (organizerSecret) headers['x-organizer-secret'] = organizerSecret
       if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
       
-      const payload = {
-        ...newSubEvent,
-        max_capacity: newSubEvent.max_capacity ? parseInt(newSubEvent.max_capacity) : null
-      }
-      
       if (editingSubEventId) {
         // Update existing
+        form.append('id', editingSubEventId)
         const res = await fetch(`/api/organizer/subevents?eventId=${encodeURIComponent(selected.id)}`, {
           method: 'PUT',
           headers,
-          body: JSON.stringify({ id: editingSubEventId, ...payload })
+          body: form
         })
         const data = await res.json()
         if (res.ok) {
           toast.success('Sub-event updated')
-          setNewSubEvent({ title: '', type: 'workshop', description: '', start_time: '', end_time: '', location: '', max_capacity: '', speaker_name: '', speaker_email: '', price_inr: '', requires_payment: false })
+          setNewSubEvent({ title: '', type: 'workshop', description: '', start_time: '', end_time: '', location: '', max_capacity: '', speaker_name: '', speaker_email: '', price_inr: '', requires_payment: false, image_url: '' })
+          setSubEventCoverFile(null)
           setEditingSubEventId(null)
           fetchSubEvents(selected.id)
         } else {
@@ -180,12 +197,13 @@ export default function OrganizerDashboard() {
         const res = await fetch(`/api/organizer/subevents?eventId=${encodeURIComponent(selected.id)}`, {
           method: 'POST',
           headers,
-          body: JSON.stringify(payload)
+          body: form
         })
         const data = await res.json()
         if (res.ok) {
           toast.success('Sub-event created')
-          setNewSubEvent({ title: '', type: 'workshop', description: '', start_time: '', end_time: '', location: '', max_capacity: '', speaker_name: '', speaker_email: '', price_inr: '', requires_payment: false })
+          setNewSubEvent({ title: '', type: 'workshop', description: '', start_time: '', end_time: '', location: '', max_capacity: '', speaker_name: '', speaker_email: '', price_inr: '', requires_payment: false, image_url: '' })
+          setSubEventCoverFile(null)
           fetchSubEvents(selected.id)
         } else {
           toast.error(data.error || 'Creation failed')
@@ -238,13 +256,16 @@ export default function OrganizerDashboard() {
       speaker_name: subEvent.speaker_name || '',
       speaker_email: subEvent.speaker_email || '',
       price_inr: subEvent.price_inr ? String(subEvent.price_inr) : '',
-      requires_payment: subEvent.requires_payment || false
+      requires_payment: subEvent.requires_payment || false,
+      image_url: subEvent.image_url || ''
     })
+    setSubEventCoverFile(null)
     setEditingSubEventId(subEvent.id)
   }
 
   function cancelEditSubEvent() {
-    setNewSubEvent({ title: '', type: 'workshop', description: '', start_time: '', end_time: '', location: '', max_capacity: '', speaker_name: '', speaker_email: '', price_inr: '', requires_payment: false })
+    setNewSubEvent({ title: '', type: 'workshop', description: '', start_time: '', end_time: '', location: '', max_capacity: '', speaker_name: '', speaker_email: '', price_inr: '', requires_payment: false, image_url: '' })
+    setSubEventCoverFile(null)
     setEditingSubEventId(null)
   }
 
@@ -1691,6 +1712,19 @@ export default function OrganizerDashboard() {
                     )}
                   </div>
 
+                  <div>
+                    <label className="text-sm text-slate-300 mb-2 block">Cover Image (optional)</label>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={(e) => setSubEventCoverFile(e.target.files?.[0] || null)}
+                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-full file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-violet-500 file:text-white hover:file:bg-violet-600"
+                    />
+                    {subEventCoverFile && (
+                      <p className="text-xs text-slate-400 mt-1">Selected: {subEventCoverFile.name}</p>
+                    )}
+                  </div>
+
                   <div className="flex gap-2 justify-end">
                     {editingSubEventId && (
                       <Button variant="ghost" onClick={cancelEditSubEvent}>Cancel</Button>
@@ -1711,16 +1745,25 @@ export default function OrganizerDashboard() {
                   ) : (
                     <div className="space-y-2 max-h-[400px] overflow-y-auto">
                       {subEvents.map((subEvent) => (
-                        <div key={subEvent.id} className="bg-white/5 border border-white/10 rounded-lg p-3 flex items-start justify-between hover:bg-white/10 transition">
-                          <div className="flex-1">
+                        <div key={subEvent.id} className="bg-white/5 border border-white/10 rounded-lg p-3 flex items-start justify-between hover:bg-white/10 transition gap-3">
+                          {subEvent.image_url && (
+                            <div className="flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden">
+                              <img 
+                                src={subEvent.image_url} 
+                                alt={subEvent.title}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <div className="font-semibold text-white">{subEvent.title}</div>
-                              <span className="text-xs bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded">{subEvent.type}</span>
+                              <div className="font-semibold text-white truncate">{subEvent.title}</div>
+                              <span className="text-xs bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded flex-shrink-0">{subEvent.type}</span>
                             </div>
                             {subEvent.description && (
-                              <div className="text-xs text-slate-400 mt-1">{subEvent.description}</div>
+                              <div className="text-xs text-slate-400 mt-1 line-clamp-2">{subEvent.description}</div>
                             )}
-                            <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
+                            <div className="flex items-center gap-3 mt-2 text-xs text-slate-400 flex-wrap">
                               {subEvent.start_time && (
                                 <span>📅 {new Date(subEvent.start_time).toLocaleString()}</span>
                               )}
@@ -1732,7 +1775,7 @@ export default function OrganizerDashboard() {
                               )}
                             </div>
                           </div>
-                          <div className="flex gap-2 ml-4">
+                          <div className="flex gap-2 ml-4 flex-shrink-0">
                             <Button
                               variant="ghost"
                               onClick={() => fetchTrackRegistrations(subEvent.id)}

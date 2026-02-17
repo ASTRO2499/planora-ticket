@@ -1,4 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
+import formidable from 'formidable'
+import fs from 'fs'
 import { createClient } from '@supabase/supabase-js'
 import {
   getOrganizerSecret,
@@ -9,6 +11,19 @@ import {
 } from '../../../lib/organizerAuth'
 
 const supabase = createClient(process.env.SUPABASE_URL || '', process.env.SUPABASE_SERVICE_KEY || '')
+
+export const config = { api: { bodyParser: false } }
+
+async function uploadCover(file: formidable.File) {
+  const bucketName = 'event-covers'
+  try { await supabase.storage.createBucket(bucketName, { public: true }) } catch {}
+  const fileBuffer = fs.readFileSync(file.filepath)
+  const fileName = `${Date.now()}-${file.originalFilename}`
+  const { data, error } = await supabase.storage.from(bucketName).upload(`public/${fileName}`, fileBuffer, { contentType: file.mimetype || 'image/jpeg' })
+  if (error) throw error
+  const { data: { publicUrl } } = supabase.storage.from(bucketName).getPublicUrl(`public/${fileName}`)
+  return publicUrl
+}
 
 /**
  * ORGANIZER AUTHENTICATION ONLY
@@ -94,30 +109,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       if (!(await verifyEventOwnership())) return
 
+      const form = formidable()
+      const { fields, files } = await new Promise<any>((resolve, reject) => {
+        form.parse(req, (err, f, fl) => err ? reject(err) : resolve({ fields: f, files: fl }))
+      })
+
+      const dataStr = Array.isArray(fields.data) ? fields.data[0] : fields.data
+      const data = dataStr ? JSON.parse(dataStr) : {}
+
       const {
-        title,
-        description,
-        type,
-        start_time,
-        end_time,
-        location,
-        max_capacity,
-        speaker_name,
-        speaker_email,
-        speaker_bio,
-        image_url,
+        title = '',
+        description = '',
+        type = '',
+        start_time = null,
+        end_time = null,
+        location = '',
+        max_capacity = null,
+        speaker_name = '',
+        speaker_email = '',
         price_inr = 0,
         requires_payment = false,
         status = 'active',
         is_published = true,
         metadata = {}
-      } = req.body
+      } = data
 
       if (!title || !type) {
         return res.status(400).json({ error: 'Missing required fields: title, type' })
       }
 
-      const { data, error } = await supabase
+      let image_url = ''
+      if (files.coverImage?.[0]) {
+        image_url = await uploadCover(files.coverImage[0])
+      }
+
+      const { data: subEvent, error } = await supabase
         .from('sub_events')
         .insert([
           {
@@ -132,7 +158,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             current_registrations: 0,
             speaker_name,
             speaker_email,
-            speaker_bio,
             image_url,
             price_inr: price_inr || 0,
             requires_payment: requires_payment || false,
@@ -149,7 +174,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(500).json({ error: error.message })
       }
 
-      return res.status(201).json({ subEvent: data, message: 'Sub-event created successfully' })
+      return res.status(201).json({ subEvent: subEvent, message: 'Sub-event created successfully' })
     } catch (error: any) {
       return res.status(500).json({ error: error.message })
     }
@@ -160,7 +185,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       if (!(await verifyEventOwnership())) return
 
-      const { id, ...updateData } = req.body
+      const form = formidable()
+      const { fields, files } = await new Promise<any>((resolve, reject) => {
+        form.parse(req, (err, f, fl) => err ? reject(err) : resolve({ fields: f, files: fl }))
+      })
+
+      const id = Array.isArray(fields.id) ? fields.id[0] : fields.id
+      const dataStr = Array.isArray(fields.data) ? fields.data[0] : fields.data
+      const data = dataStr ? JSON.parse(dataStr) : {}
 
       if (!id) {
         return res.status(400).json({ error: 'Missing sub-event id' })
@@ -169,7 +201,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Verify sub-event belongs to this event
       const { data: subEvent, error: checkError } = await supabase
         .from('sub_events')
-        .select('id, event_id')
+        .select('id, event_id, image_url')
         .eq('id', id)
         .maybeSingle()
 
@@ -177,12 +209,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(404).json({ error: 'Sub-event not found or does not belong to this event' })
       }
 
-      const { data, error } = await supabase
+      const updateData: any = {
+        ...data,
+        updated_at: new Date().toISOString()
+      }
+
+      // Handle image upload
+      if (files.coverImage?.[0]) {
+        updateData.image_url = await uploadCover(files.coverImage[0])
+      }
+
+      const { data: updatedSubEvent, error } = await supabase
         .from('sub_events')
-        .update({
-          ...updateData,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', id)
         .select()
         .single()
@@ -191,7 +230,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(500).json({ error: error.message })
       }
 
-      return res.json({ subEvent: data, message: 'Sub-event updated successfully' })
+      return res.json({ subEvent: updatedSubEvent, message: 'Sub-event updated successfully' })
     } catch (error: any) {
       return res.status(500).json({ error: error.message })
     }
