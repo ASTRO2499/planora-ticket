@@ -210,7 +210,7 @@ export default function EventTrackPage() {
                           src={subEvent.image_url}
                           alt={subEvent.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          onClick={() => setSelectedImageUrl(subEvent.image_url)}
+                          onClick={() => setSelectedImageUrl(subEvent.image_url ?? null)}
                         />
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center">
                           <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-white text-sm font-medium bg-black/50 px-4 py-2 rounded-lg">

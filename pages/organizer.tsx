@@ -497,7 +497,7 @@ export default function OrganizerDashboard() {
     if (!selected) return
     const form = new FormData()
     form.append('id', selected.id)
-    ;['title','description','date','location','price_inr','is_published','is_featured'].forEach((f)=>{
+    ;['title','description','date','location','price_inr','is_published','is_featured','is_published','track_coming_soon'].forEach((f)=>{
       if (selected[f] !== undefined) form.append(f, String(selected[f]))
     })
     if (coverFile) form.append('coverImage', coverFile)
@@ -508,9 +508,20 @@ export default function OrganizerDashboard() {
       if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
       const res = await fetch('/api/organizer/events', { method: 'PUT', headers, body: form })
       const data = await res.json()
-      if (res.ok) { toast.success('Event updated'); fetchEvents() }
-      else toast.error('Update failed')
-    } catch { toast.error('Network error') } finally { setLoading(false) }
+      if (res.ok) { 
+        toast.success('Event updated')
+        fetchEvents()
+      } else {
+        const errorMsg = data.error || data.detail || 'Update failed'
+        console.error('[EVENT UPDATE ERROR]', { status: res.status, error: data })
+        toast.error(errorMsg)
+      }
+    } catch (err: any) { 
+      console.error('[EVENT UPDATE NETWORK ERROR]', err)
+      toast.error('Network error: ' + err?.message)
+    } finally { 
+      setLoading(false) 
+    }
   }
 
   async function uploadTemplate() {
